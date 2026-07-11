@@ -1,0 +1,206 @@
+{
+  "activeOrganizationId": "eea-1781012508876",
+  "organizations": [
+    {
+      "id": "lucas-align",
+      "organization": "Lucas Align",
+      "primaryContact": "Lucas Bryant",
+      "contactTitle": "Founder",
+      "contactEmail": "",
+      "requestedAmountNarrative": "To be determined based on the foundation's funding guidelines.",
+      "summary": "Lucas Align builds technology around people through custom software, AI solutions, and workflow automation for organizations that serve families and communities.",
+      "mission": "We help mission-driven teams use practical technology to coordinate care, reduce administrative burden, and steward resources wisely.",
+      "positioning": "Lucas Align helps people-centered organizations turn care into clear, coordinated action. The work is about making it easier for families to be supported and easier for helpers to know what to do next.",
+      "programContext": "A core demo use case is support for Wraparound Care Communities serving foster, adoptive, kinship, and vulnerable families. The purpose is simple: help the right people see the right needs, respond with care, and stay connected around each family.",
+      "audiences": [
+        "families receiving practical care and relational support",
+        "volunteers who claim and complete support tasks",
+        "lead volunteers who coordinate local care teams",
+        "church advocates who mobilize and sustain engagement",
+        "county coordinators and administrators who need visibility, reporting, and safe workflows",
+        "nonprofit leaders responsible for implementation, measurement, and stewardship"
+      ],
+      "focusAreas": [
+        "Wraparound Care Communities",
+        "foster, adoptive, and kinship support",
+        "vulnerable-family support",
+        "volunteer coordination",
+        "lead volunteer workflows",
+        "church advocate engagement",
+        "county coordinator and administrator tools",
+        "reporting, permissions, schedules, support tasks, security, and stewardship"
+      ],
+      "answerPrinciples": [
+        "Use first person plural: We...",
+        "Answer the exact question in plain, grant-ready language.",
+        "Lead with vision, purpose, and benefit to families.",
+        "Never contradict the selected organization's mission, audience, faith commitments, eligibility standards, or program model.",
+        "For cultural questions, be kind, loving, biblically grounded, and unwavering without sounding judgmental or hostile.",
+        "Use workflow details only when they make the answer clearer.",
+        "Keep technology language simple and human-centered.",
+        "Mention reporting, permissions, security, and stewardship only when relevant.",
+        "Do not invent formal partnerships, exact budgets, exact counties, or numeric outcomes unless provided by the user.",
+        "Keep answers concise, usually 35 to 65 words."
+      ],
+      "voice": "First person plural, concise, warm, clear, non-technical, vision-centered, and funder-ready."
+    },
+    {
+      "id": "sample-family-support",
+      "organization": "Sample Family Support Network",
+      "primaryContact": "",
+      "contactTitle": "",
+      "contactEmail": "",
+      "requestedAmountNarrative": "To be determined based on the foundation's funding guidelines.",
+      "summary": "A sample nonprofit profile for testing grant applications for a family-serving organization.",
+      "mission": "We help families find practical support, trusted relationships, and consistent care during vulnerable seasons.",
+      "positioning": "This sample organization focuses on direct family support and community coordination.",
+      "programContext": "Use this profile as a placeholder when drafting for another nonprofit before adding the real organization details.",
+      "audiences": [
+        "families seeking practical support",
+        "community volunteers",
+        "program staff",
+        "local partner organizations"
+      ],
+      "focusAreas": [
+        "family support",
+        "volunteer coordination",
+        "community partnerships",
+        "practical care",
+        "reporting and stewardship"
+      ],
+      "answerPrinciples": [
+        "Use first person plural: We...",
+        "Be direct and concise.",
+        "Focus on the family-facing purpose.",
+        "Never contradict the selected organization's mission, audience, values, eligibility standards, or program model.",
+        "Do not invent details not in the profile."
+      ],
+      "voice": "First person plural, concise, warm, and direct."
+    },
+    {
+      "id": "traillife-pa-2301",
+      "organization": "Trail Life Troop PA 2301",
+      "primaryContact": "Bryant Lucas",
+      "contactTitle": "Chaplain",
+      "contactEmail": "bryant@rivcolucasinc.com",
+      "ein": "23-3046329",
+      "taxExemptNo": "75435237",
+      "requestedAmountNarrative": "To be determined based on the foundation's funding guidelines.",
+      "summary": "Trail Life Troop PA 2301 is a local Trail Life USA troop helping boys grow through Christ-centered outdoor adventure, character formation, leadership development, service, and mentoring.",
+      "mission": "We guide boys toward courage, integrity, service, faith, and outdoor adventure so they can grow into godly and responsible men.",
+      "positioning": "Trail Life Troop PA 2301 provides a local, church-connected setting where boys and adult mentors build character, leadership, practical skills, and faith through shared adventure and service.",
+      "programContext": "Trail Life USA is church-based, Christ-centered, and boy-focused. Troops use outdoor adventure, mentoring, patrol-style participation, service, advancement, and leadership opportunities to help boys grow in character, purpose, practical skills, and faith.",
+      "audiences": [
+        "boys and young men ages 5 to 17",
+        "families seeking faith-based character development",
+        "adult volunteers and mentors",
+        "church and community partners",
+        "youth who benefit from outdoor adventure, service, and positive role models"
+      ],
+      "focusAreas": [
+        "Outdoor Skills",
+        "Life Skills",
+        "Heritage",
+        "Hobbies",
+        "Values",
+        "Science & Technology",
+        "Sports & Fitness"
+      ],
+      "answerPrinciples": [
+        "Use first person plural: We...",
+        "Answer the exact question in plain, grant-ready language.",
+        "Lead with vision, purpose, and benefit to families.",
+        "Never contradict Trail Life Troop PA 2301's Christian faith, boy-focused program standards, mission, or values.",
+        "For cultural questions, be kind, loving, biblically grounded, and unwavering without sounding judgmental or hostile.",
+        "Use workflow details only when they make the answer clearer.",
+        "Keep technology language simple and human-centered.",
+        "Mention reporting, permissions, security, and stewardship only when relevant.",
+        "Do not invent formal partnerships, exact budgets, exact counties, or numeric outcomes unless provided by the user.",
+        "Keep answers concise, usually 35 to 65 words."
+      ],
+      "voice": "First person plural, concise, warm, clear, non-technical, vision-centered, and funder-ready."
+    },
+    {
+      "id": "eea",
+      "organization": "EEA",
+      "primaryContact": "",
+      "contactTitle": "",
+      "contactEmail": "",
+      "ein": "23-3046329",
+      "taxExemptNo": "75435237",
+      "requestedAmountNarrative": "To be determined based on the foundation's funding guidelines.",
+      "summary": "",
+      "mission": "",
+      "positioning": "",
+      "programContext": "",
+      "audiences": [],
+      "focusAreas": [],
+      "answerPrinciples": [
+        "Use first person plural: We...",
+        "Answer the exact question in plain, grant-ready language.",
+        "Lead with vision, purpose, and benefit to families.",
+        "Never contradict Trail Life Troop PA 2301's Christian faith, boy-focused program standards, mission, or values.",
+        "For cultural questions, be kind, loving, biblically grounded, and unwavering without sounding judgmental or hostile.",
+        "Use workflow details only when they make the answer clearer.",
+        "Keep technology language simple and human-centered.",
+        "Mention reporting, permissions, security, and stewardship only when relevant.",
+        "Do not invent formal partnerships, exact budgets, exact counties, or numeric outcomes unless provided by the user.",
+        "Keep answers concise, usually 35 to 65 words."
+      ],
+      "voice": "First person plural, concise, warm, clear, non-technical, vision-centered, and funder-ready."
+    },
+    {
+      "id": "emerging-entrepreneurs-academy",
+      "organization": "EEA",
+      "website": "www.eeainpa.org",
+      "primaryContact": "Gary Siebert",
+      "contactTitle": "CEO",
+      "contactEmail": "grseibert@eeainpa.org",
+      "requestedAmountNarrative": "$50,000",
+      "summary": "Emerging Entrepreneurs Academy (EEA) is a Pennsylvania-based 501(c)(3) nonprofit that equips high school students with entrepreneurial skills through an intensive six-week summer program combining classroom instruction, mentorship from local business leaders, and hands-on internships. Serving students in Berks County and surrounding communities, EEA helps young people explore business ownership, leadership, financial literacy, marketing, and workforce readiness while connecting them with experienced entrepreneurs. The program is designed to cultivate the next generation of business leaders by providing real-world experiences, practical training, and professional networking opportunities that prepare students for future careers and economic success.",
+      "mission": "The Emerging Entrepreneurs Academy prepares future business leaders by connecting high school students with entrepreneurship education, mentorship, and real-world business experiences that foster leadership, innovation, and workforce readiness.",
+      "positioning": "A specialized bridge between secondary education and business ownership, EEA utilizes a hybrid model of proprietary classroom instruction and immersive internships to transform students into community changemakers.",
+      "programContext": "The flagship 6-week summer program is a joint effort by Career Ready Berks and the Small Business Resource Association. It alternates between interactive classroom workshops (Weeks 1, 3, 5) and hands-on internships (Weeks 2, 4, 6), culminating in a Dream Pitch Presentation and an Expo and Banquet.",
+      "audiences": [
+        "High school students in 10th, 11th, and 12th grades (primarily Berks and Lancaster Counties)",
+        "Local entrepreneurs and business owners",
+        "Community sponsors and philanthropic donors",
+        "Educational organizations"
+      ],
+      "focusAreas": [
+        "Youth Development, Entrepreneurship Education, Workforce Development, Leadership Development, Financial Literacy, Career Readiness, and Economic Development."
+      ],
+      "answerPrinciples": [
+        "Emphasize the 'real-world' application of skills through internships and practicing entrepreneurs.",
+        "Highlight the accessibility of the program via scholarships and sponsorships to ensure no student is barred by cost.",
+        "Focus on the long-term impact of the alumni network and community connections.",
+        "Stress the comprehensive nature of the curriculum, covering everything from legal entities to digital branding."
+      ],
+      "voice": "First person plural, concise, warm, clear, non-technical, vision-centered, and funder-ready.",
+      "ein": "88-4356511",
+      "taxExemptNo": ""
+    },
+    {
+      "id": "eea-1781012508876",
+      "organization": "eea",
+      "website": "www.eeainpa.org",
+      "primaryContact": "",
+      "contactTitle": "",
+      "contactEmail": "",
+      "requestedAmountNarrative": "To be determined based on the foundation's funding guidelines.",
+      "summary": "Source: https://www.eeainpa.org\nTitle: Training for Aspiring Entrepreneurs - Emerging Entrepreneurs Academy\nTraining for Aspiring Entrepreneurs - Emerging Entrepreneurs Academy HOME ABOUT DONATE SPONSORS PHOTOS & VIDEOS IN THE NEWS APPLY CONTACT EXPO & BANQUET CONTACT US EMERGING ENTREPRENEURS ACADEMY An exclusive program for high school students interested in learning about and experiencing the life of an entrepreneur! The Emerging Entrepreneurs Academy is an intensive 6-week entrepreneur works",
+      "mission": "Source: https://www.eeainpa.org\nTitle: Training for Aspiring Entrepreneurs - Emerging Entrepreneurs Academy\nTraining for Aspiring Entrepreneurs - Emerging Entrepreneurs Academy HOME ABOUT DONATE SPONSORS PHOTOS & VIDEOS IN THE NEWS APPLY CONTACT EXPO & BANQUET CONTACT US EMERGING ENTREPRENEURS ACADEMY An exclusive program for high school students interested in learning about and experiencing the life of an entrepreneur! The Emerging Entrepreneurs Academy is an intensive 6-week entrepreneur works",
+      "positioning": "eea serves its community through mission-driven programs and partnerships.",
+      "programContext": "Source: https://www.eeainpa.org\nTitle: Training for Aspiring Entrepreneurs - Emerging Entrepreneurs Academy\nTraining for Aspiring Entrepreneurs - Emerging Entrepreneurs Academy HOME ABOUT DONATE SPONSORS PHOTOS & VIDEOS IN THE NEWS APPLY CONTACT EXPO & BANQUET CONTACT US EMERGING ENTREPRENEURS ACADEMY An exclusive program for high school students interested in learning about and experiencing the life of an entrepreneur! The Emerging Entrepreneurs Academy is an intensive 6-week entrepreneur works",
+      "audiences": [],
+      "focusAreas": [],
+      "answerPrinciples": [
+        "Use first person plural: We...",
+        "Be direct and concise.",
+        "Stay true to the selected organization's mission, values, audience, eligibility standards, and program model.",
+        "Do not invent details not found in the profile or website context."
+      ],
+      "voice": "First person plural, concise, warm, and direct."
+    }
+  ]
+}

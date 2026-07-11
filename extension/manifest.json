@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "GrantFlow Assistant",
+  "version": "0.1.0",
+  "description": "Grant-writing copilot side panel for application forms.",
+  "permissions": ["activeTab", "scripting", "sidePanel"],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1/*",
+    "http://127.0.0.1:3000/*",
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://localhost:3000/*",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1:3000/*",
+        "https://*/*",
+        "http://*/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Open GrantFlow Assistant"
+  }
+}

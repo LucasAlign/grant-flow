@@ -1,0 +1,239 @@
+{
+  "organizations": {
+    "traillife-pa-2301": {
+      "preferences": [
+        "Follow the user's final edited answers as examples for tone, length, and substance.",
+        "Prefer direct, concise, plainspoken answers over broad or abstract language.",
+        "Keep answers short unless the question clearly requires detail.",
+        "Lead with the answer and avoid filler, setup, and repeated mission language.",
+        "Avoid technical detail unless the application specifically asks for it."
+      ],
+      "events": [
+        {
+          "id": "learn_1781011679306",
+          "organizationId": "traillife-pa-2301",
+          "question": "Core Activities Describe the regular activities, events, meetings, or services supported by this request. | Core Activities | Describe the regular activities, events, meetings, or services supported by this request. | program-activities | program-activities",
+          "originalAnswer": "We answer this question through the specific lens of Trail Life Troop PA 2301's mission, keeping the response practical, direct, and tied to the purpose of the request.",
+          "finalAnswer": "We answer this question through the specific lens of Trail Life Troop PA 2301's mission, keeping the response practical, direct, and tied to the purpose of the request.",
+          "instruction": "Answer this exact question clearly and concisely.",
+          "field": {
+            "key": "#program-activities",
+            "id": "program-activities",
+            "name": "program-activities",
+            "type": "textarea",
+            "label": "Core Activities",
+            "placeholder": "Describe the regular activities, events, meetings, or services supported by this request.",
+            "context": "Core Activities Describe the regular activities, events, meetings, or services supported by this request.",
+            "maxLength": 0,
+            "value": ""
+          },
+          "pageUrl": "http://localhost:3000/mock-grant",
+          "source": "extension-edit",
+          "updatedAt": "2026-06-09T13:27:59.306Z"
+        },
+        {
+          "id": "learn_1780978281527",
+          "organizationId": "traillife-pa-2301",
+          "question": "Participant Journey What does a participant experience from first involvement through deeper engagement? | Participant Journey | What does a participant experience from first involvement through deeper engagement? | participant-journey | participant-journey",
+          "originalAnswer": "We guide boys toward courage, integrity, service, faith, and outdoor adventure so they can grow into godly and responsible men.",
+          "finalAnswer": "We welcome boys into outdoor adventure and patrol-style participation. As they engage deeper, we guide them through advancement levels and Christ-centered mentoring, empowering them to take on leadership roles and grow into godly, responsible men.",
+          "instruction": "Answer this exact question clearly and concisely.",
+          "field": {
+            "key": "#participant-journey",
+            "id": "participant-journey",
+            "name": "participant-journey",
+            "type": "textarea",
+            "label": "Participant Journey",
+            "placeholder": "What does a participant experience from first involvement through deeper engagement?",
+            "context": "Participant Journey What does a participant experience from first involvement through deeper engagement?",
+            "value": ""
+          },
+          "pageUrl": "http://localhost:3000/mock-grant",
+          "source": "extension-edit",
+          "updatedAt": "2026-06-09T04:11:21.527Z"
+        },
+        {
+          "id": "learn_1780976571604",
+          "organizationId": "traillife-pa-2301",
+          "question": "Staffing and Volunteer Support How will staff or volunteer leaders be trained, supported, or equipped? | Staffing and Volunteer Support | How will staff or volunteer leaders be trained, supported, or equipped? | staffing-volunteers | staffing-volunteers",
+          "originalAnswer": "We use practical tools only where they help Trail Life Troop PA 2301 serve more clearly, consistently, and responsibly.",
+          "finalAnswer": "We equip our volunteer leaders through mandatory child safety and youth protection training and background checks. They are supported by our local church charter and the structured mentoring resources provided by Trail Life USA.",
+          "instruction": "Make this answer more direct, concise, and high fidelity.",
+          "field": {
+            "key": "#staffing-volunteers",
+            "id": "staffing-volunteers",
+            "name": "staffing-volunteers",
+            "type": "textarea",
+            "label": "Staffing and Volunteer Support",
+            "placeholder": "How will staff or volunteer leaders be trained, supported, or equipped?",
+            "context": "Staffing and Volunteer Support How will staff or volunteer leaders be trained, supported, or equipped?",
+            "value": ""
+          },
+          "pageUrl": "http://localhost:3000/mock-grant",
+          "source": "extension-edit",
+          "updatedAt": "2026-06-09T03:42:51.604Z"
+        },
+        {
+          "id": "learn_1780976414928",
+          "organizationId": "traillife-pa-2301",
+          "question": "Volunteer Engagement How do volunteers participate, lead, and sustain the work? | Volunteer Engagement | How do volunteers participate, lead, and sustain the work? | volunteers | volunteers",
+          "originalAnswer": "We sustain the work by keeping it aligned with Trail Life Troop PA 2301's mission, volunteers, partners, and available resources.",
+          "finalAnswer": "Adult volunteers and parents participate as mentors, leading outdoor adventures and guiding boys through character and faith advancement. We sustain our work through trained leadership and the support of our local church charter.",
+          "instruction": "Answer this exact question clearly and concisely.",
+          "field": {
+            "key": "#volunteers",
+            "id": "volunteers",
+            "name": "volunteers",
+            "type": "textarea",
+            "label": "Volunteer Engagement",
+            "placeholder": "How do volunteers participate, lead, and sustain the work?",
+            "context": "Volunteer Engagement How do volunteers participate, lead, and sustain the work?",
+            "value": ""
+          },
+          "pageUrl": "http://localhost:3000/mock-grant",
+          "source": "extension-edit",
+          "updatedAt": "2026-06-09T03:40:14.928Z"
+        },
+        {
+          "id": "learn_1780976377427",
+          "organizationId": "traillife-pa-2301",
+          "question": "Character Development How does your program build character, integrity, service, and resilience? | Character Development | How does your program build character, integrity, service, and resilience? | character-development | character-development",
+          "originalAnswer": "We guide boys toward courage, integrity, service, faith, and outdoor adventure so they can grow into godly and responsible men.",
+          "finalAnswer": "We guide boys toward courage, integrity, service, faith, and outdoor adventure so they can grow into godly and responsible men.",
+          "instruction": "Answer this exact question clearly and concisely.",
+          "field": {
+            "key": "#character-development",
+            "id": "character-development",
+            "name": "character-development",
+            "type": "textarea",
+            "label": "Character Development",
+            "placeholder": "How does your program build character, integrity, service, and resilience?",
+            "context": "Character Development How does your program build character, integrity, service, and resilience?",
+            "value": ""
+          },
+          "pageUrl": "http://localhost:3000/mock-grant",
+          "source": "extension-edit",
+          "updatedAt": "2026-06-09T03:39:37.427Z"
+        },
+        {
+          "id": "learn_1780976341787",
+          "organizationId": "traillife-pa-2301",
+          "question": "Leadership Development How does your program develop leadership, responsibility, or maturity? | Leadership Development | How does your program develop leadership, responsibility, or maturity? | leadership-development | leadership-development",
+          "originalAnswer": "We guide boys toward courage, integrity, service, faith, and outdoor adventure so they can grow into godly and responsible men.",
+          "finalAnswer": "We develop leadership and maturity through patrol-style participation, adult mentoring, and structured advancement. By assuming leadership roles and engaging in service projects, boys build the responsibility and integrity needed to become godly and responsible men.",
+          "instruction": "Answer this exact question clearly and concisely.",
+          "field": {
+            "key": "#leadership-development",
+            "id": "leadership-development",
+            "name": "leadership-development",
+            "type": "textarea",
+            "label": "Leadership Development",
+            "placeholder": "How does your program develop leadership, responsibility, or maturity?",
+            "context": "Leadership Development How does your program develop leadership, responsibility, or maturity?",
+            "value": ""
+          },
+          "pageUrl": "http://localhost:3000/mock-grant",
+          "source": "extension-edit",
+          "updatedAt": "2026-06-09T03:39:01.787Z"
+        },
+        {
+          "id": "learn_1780976297796",
+          "organizationId": "traillife-pa-2301",
+          "question": "Participant Journey What does a participant experience from first involvement through deeper engagement? | Participant Journey | What does a participant experience from first involvement through deeper engagement? | participant-journey | participant-journey",
+          "originalAnswer": "We guide boys toward courage, integrity, service, faith, and outdoor adventure so they can grow into godly and responsible men.",
+          "finalAnswer": "Boys begin with outdoor adventure and basic skill-building. As they engage deeper, we guide them through advancement levels, leadership roles within their patrols, and character growth through mentoring and service.",
+          "instruction": "Answer this exact question clearly and concisely.",
+          "field": {
+            "key": "#participant-journey",
+            "id": "participant-journey",
+            "name": "participant-journey",
+            "type": "textarea",
+            "label": "Participant Journey",
+            "placeholder": "What does a participant experience from first involvement through deeper engagement?",
+            "context": "Participant Journey What does a participant experience from first involvement through deeper engagement?",
+            "value": ""
+          },
+          "pageUrl": "http://localhost:3000/mock-grant",
+          "source": "extension-edit",
+          "updatedAt": "2026-06-09T03:38:17.796Z"
+        },
+        {
+          "id": "learn_1780976294276",
+          "organizationId": "traillife-pa-2301",
+          "question": "Participant Journey What does a participant experience from first involvement through deeper engagement? | Participant Journey | What does a participant experience from first involvement through deeper engagement? | participant-journey | participant-journey",
+          "originalAnswer": "We guide boys toward courage, integrity, service, faith, and outdoor adventure so they can grow into godly and responsible men.",
+          "finalAnswer": "We welcome boys into outdoor adventure and basic skill-building. As they engage deeper, they progress through advancement levels, assume leadership roles within their patrols, and grow in faith and character through consistent mentoring and service.",
+          "instruction": "Answer this exact question clearly and concisely.",
+          "field": {
+            "key": "#participant-journey",
+            "id": "participant-journey",
+            "name": "participant-journey",
+            "type": "textarea",
+            "label": "Participant Journey",
+            "placeholder": "What does a participant experience from first involvement through deeper engagement?",
+            "context": "Participant Journey What does a participant experience from first involvement through deeper engagement?",
+            "value": ""
+          },
+          "pageUrl": "http://localhost:3000/mock-grant",
+          "source": "extension-edit",
+          "updatedAt": "2026-06-09T03:38:14.276Z"
+        },
+        {
+          "id": "learn_1780693277709",
+          "organizationId": "traillife-pa-2301",
+          "question": "Core Activities Describe the regular activities, events, meetings, or services supported by this request. | Core Activities | Describe the regular activities, events, meetings, or services supported by this request. | program-activities | program-activities",
+          "originalAnswer": "We guide boys toward courage, integrity, service, faith, and outdoor adventure so they can grow into godly and responsible men.",
+          "finalAnswer": "We provide regular troop meetings, outdoor adventures, and mentoring. Our activities include service projects, leadership training, and advancement in outdoor and life skills, guiding boys to grow in character, faith, and purpose.",
+          "instruction": "Answer this exact question clearly and concisely.",
+          "field": {
+            "key": "#program-activities",
+            "id": "program-activities",
+            "name": "program-activities",
+            "type": "textarea",
+            "label": "Core Activities",
+            "placeholder": "Describe the regular activities, events, meetings, or services supported by this request.",
+            "context": "Core Activities Describe the regular activities, events, meetings, or services supported by this request.",
+            "value": ""
+          },
+          "pageUrl": "http://localhost:3000/mock-grant",
+          "source": "extension-edit",
+          "updatedAt": "2026-06-05T21:01:17.709Z"
+        }
+      ],
+      "updatedAt": "2026-06-09T13:27:59.307Z"
+    },
+    "eea-1781012508876": {
+      "preferences": [
+        "Follow the user's final edited answers as examples for tone, length, and substance.",
+        "Prefer direct, concise, plainspoken answers over broad or abstract language.",
+        "Keep answers short unless the question clearly requires detail.",
+        "Lead with the answer and avoid filler, setup, and repeated mission language."
+      ],
+      "events": [
+        {
+          "id": "learn_1781012582719",
+          "organizationId": "eea-1781012508876",
+          "question": "Program Model Explain how your program works and what participants experience. | Program Model | Explain how your program works and what participants experience. | program-model | program-model",
+          "originalAnswer": "The flagship 6-week summer program is a joint effort by Career Ready Berks and the Small Business Resource Association. It alternates between interactive classroom workshops (Weeks 1, 3, 5) and hands-on internships (Weeks 2, 4, 6), culminating in a Dream Pitch Presentation and an Expo and Banquet.",
+          "finalAnswer": "We lead an intensive six-week summer program for high school students that alternates between interactive classroom workshops and hands-on internships with local entrepreneurs. Participants conclude their experience with a Dream Pitch Presentation and an Expo and Banquet.",
+          "instruction": "Answer this exact question clearly and concisely.",
+          "field": {
+            "key": "#program-model",
+            "id": "program-model",
+            "name": "program-model",
+            "type": "textarea",
+            "label": "Program Model",
+            "placeholder": "Explain how your program works and what participants experience.",
+            "context": "Program Model Explain how your program works and what participants experience.",
+            "maxLength": 0,
+            "value": ""
+          },
+          "pageUrl": "http://localhost:3000/mock-grant",
+          "source": "extension-edit",
+          "updatedAt": "2026-06-09T13:43:02.719Z"
+        }
+      ],
+      "updatedAt": "2026-06-09T13:43:02.719Z"
+    }
+  }
+}

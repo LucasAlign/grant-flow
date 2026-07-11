@@ -1,0 +1,212 @@
+{
+  "items": [
+    {
+      "id": "ans_1781012582690",
+      "organizationId": "eea-1781012508876",
+      "question": "Program Model Explain how your program works and what participants experience. | Program Model | Explain how your program works and what participants experience. | program-model | program-model",
+      "answer": "We lead an intensive six-week summer program for high school students that alternates between interactive classroom workshops and hands-on internships with local entrepreneurs. Participants conclude their experience with a Dream Pitch Presentation and an Expo and Banquet.",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-09T13:43:02.690Z"
+    },
+    {
+      "id": "ans_1781011679282",
+      "organizationId": "traillife-pa-2301",
+      "question": "Core Activities Describe the regular activities, events, meetings, or services supported by this request. | Core Activities | Describe the regular activities, events, meetings, or services supported by this request. | program-activities | program-activities",
+      "answer": "We answer this question through the specific lens of Trail Life Troop PA 2301's mission, keeping the response practical, direct, and tied to the purpose of the request.",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-09T13:27:59.282Z"
+    },
+    {
+      "id": "ans_1780978281523",
+      "organizationId": "traillife-pa-2301",
+      "question": "Participant Journey What does a participant experience from first involvement through deeper engagement? | Participant Journey | What does a participant experience from first involvement through deeper engagement? | participant-journey | participant-journey",
+      "answer": "We welcome boys into outdoor adventure and patrol-style participation. As they engage deeper, we guide them through advancement levels and Christ-centered mentoring, empowering them to take on leadership roles and grow into godly, responsible men.",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-09T04:11:21.523Z"
+    },
+    {
+      "id": "ans_1780976571475",
+      "organizationId": "traillife-pa-2301",
+      "question": "Staffing and Volunteer Support How will staff or volunteer leaders be trained, supported, or equipped? | Staffing and Volunteer Support | How will staff or volunteer leaders be trained, supported, or equipped? | staffing-volunteers | staffing-volunteers",
+      "answer": "We equip our volunteer leaders through mandatory child safety and youth protection training and background checks. They are supported by our local church charter and the structured mentoring resources provided by Trail Life USA.",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-09T03:42:51.475Z"
+    },
+    {
+      "id": "ans_1780976414923",
+      "organizationId": "traillife-pa-2301",
+      "question": "Volunteer Engagement How do volunteers participate, lead, and sustain the work? | Volunteer Engagement | How do volunteers participate, lead, and sustain the work? | volunteers | volunteers",
+      "answer": "Adult volunteers and parents participate as mentors, leading outdoor adventures and guiding boys through character and faith advancement. We sustain our work through trained leadership and the support of our local church charter.",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-09T03:40:14.923Z"
+    },
+    {
+      "id": "ans_1780976377424",
+      "organizationId": "traillife-pa-2301",
+      "question": "Character Development How does your program build character, integrity, service, and resilience? | Character Development | How does your program build character, integrity, service, and resilience? | character-development | character-development",
+      "answer": "We guide boys toward courage, integrity, service, faith, and outdoor adventure so they can grow into godly and responsible men.",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-09T03:39:37.424Z"
+    },
+    {
+      "id": "ans_1780976341779",
+      "organizationId": "traillife-pa-2301",
+      "question": "Leadership Development How does your program develop leadership, responsibility, or maturity? | Leadership Development | How does your program develop leadership, responsibility, or maturity? | leadership-development | leadership-development",
+      "answer": "We develop leadership and maturity through patrol-style participation, adult mentoring, and structured advancement. By assuming leadership roles and engaging in service projects, boys build the responsibility and integrity needed to become godly and responsible men.",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-09T03:39:01.779Z"
+    },
+    {
+      "id": "ans_1780624790900",
+      "organizationId": "traillife-pa-2301",
+      "question": "Closing Statement Briefly summarize why this request matters now. | Closing Statement | Briefly summarize why this request matters now. | closing-statement | closing-statement",
+      "answer": "This support is vital to providing the mentoring and outdoor adventure boys need to build character and faith. We are guiding a generation toward courage and integrity so they grow into godly and responsible men.",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-05T01:59:50.900Z"
+    },
+    {
+      "id": "ans_1780624780977",
+      "organizationId": "traillife-pa-2301",
+      "question": "Evidence of Need or Effectiveness What evidence, experience, or observations show that this program matters? | Evidence of Need or Effectiveness | What evidence, experience, or observations show that this program matters? | evidence | evidence",
+      "answer": "We observe a critical need for positive male mentors and faith-based character formation. Our experience shows that combining outdoor adventure with Christ-centered mentoring effectively builds the integrity, leadership, and faith boys need to become godly and responsible men.",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-05T01:59:40.977Z"
+    },
+    {
+      "id": "ans_1780407308478",
+      "organizationId": "lucas-align",
+      "question": "Primary Contact | Primary Contact | contactName | contact-name",
+      "answer": "Bryant Lucas",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-02T13:35:08.478Z"
+    },
+    {
+      "id": "ans_1780407303912",
+      "organizationId": "lucas-align",
+      "question": "Organization Name | Organization Name | organizationName | organization-name",
+      "answer": "Lucas Align",
+      "source": "extension-edit",
+      "updatedAt": "2026-06-02T13:35:03.912Z"
+    },
+    {
+      "id": "seed_mission",
+      "organizationId": "lucas-align",
+      "question": "Describe your mission.",
+      "answer": "We help mission-driven teams care for families with more clarity, coordination, and follow-through. Our purpose is to make support easier to organize so volunteers, churches, and community partners can respond to real needs with consistency and compassion.",
+      "source": "seed",
+      "updatedAt": "2026-06-02T00:00:00.000Z"
+    },
+    {
+      "id": "seed_wraparound",
+      "organizationId": "lucas-align",
+      "question": "How do you support Wraparound Care Communities?",
+      "answer": "We support Wraparound Care Communities by helping the people around a family stay coordinated. The goal is simple: make needs easier to see, support easier to offer, and follow-through easier to sustain so families experience care that is timely, practical, and trustworthy.",
+      "source": "seed",
+      "updatedAt": "2026-06-02T00:00:00.000Z"
+    },
+    {
+      "id": "seed_technology",
+      "organizationId": "lucas-align",
+      "question": "Describe the role of technology, custom software, AI, and workflow automation.",
+      "answer": "We use technology to support relationships, not replace them. The purpose is to reduce confusion, missed handoffs, and unnecessary administrative work so people can spend more time serving families and less time managing scattered information.",
+      "source": "seed",
+      "updatedAt": "2026-06-02T00:00:00.000Z"
+    },
+    {
+      "id": "seed_volunteers",
+      "organizationId": "lucas-align",
+      "question": "How do volunteers, lead volunteers, and church advocates participate?",
+      "answer": "We help volunteers move from willingness to action. Clear needs, simple roles, and better follow-through make it easier for volunteers, lead volunteers, and church advocates to serve families consistently without losing the personal, relational heart of the work.",
+      "source": "seed",
+      "updatedAt": "2026-06-02T00:00:00.000Z"
+    },
+    {
+      "id": "seed_reporting",
+      "organizationId": "lucas-align",
+      "question": "How will reporting, security, permissions, and stewardship be handled?",
+      "answer": "We treat reporting and security as part of good stewardship. The goal is to give leaders enough visibility to understand progress and care for resources well, while protecting sensitive family information and keeping access appropriate to each person's role.",
+      "source": "seed",
+      "updatedAt": "2026-06-02T00:00:00.000Z"
+    },
+    {
+      "id": "trail_pa2301_mission",
+      "organizationId": "traillife-pa-2301",
+      "question": "Describe your mission.",
+      "answer": "We guide boys toward courage, integrity, service, faith, and outdoor adventure so they can grow into godly and responsible men.",
+      "source": "official-summary",
+      "updatedAt": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "trail_pa2301_population",
+      "organizationId": "traillife-pa-2301",
+      "question": "Who do you serve?",
+      "answer": "We serve boys and young men, along with families seeking a Christ-centered setting for character growth, outdoor adventure, mentoring, leadership, and service.",
+      "source": "official-summary",
+      "updatedAt": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "trail_pa2301_program",
+      "organizationId": "traillife-pa-2301",
+      "question": "Describe your program model.",
+      "answer": "We use outdoor adventure, mentoring, advancement, service, and troop leadership to help boys build practical skills, character, faith, and confidence.",
+      "source": "official-summary",
+      "updatedAt": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "trail_pa2301_need",
+      "organizationId": "traillife-pa-2301",
+      "question": "What community need do you address?",
+      "answer": "We address the need for positive mentors, meaningful outdoor experiences, character formation, leadership development, and faith-based community for boys.",
+      "source": "official-summary",
+      "updatedAt": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "trail_pa2301_lgbtq_respect",
+      "organizationId": "traillife-pa-2301",
+      "question": "How would your organization respond to concerns about LGBTQ+ inclusion while remaining faithful to your beliefs?",
+      "answer": "We believe every person should be treated with dignity, kindness, and respect. At the same time, we remain faithful to our Christian convictions and boy-focused program standards. We aim to be clear without being harsh, and loving without compromising our beliefs.",
+      "source": "tone-guidance",
+      "updatedAt": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "trail_pa2301_gender_identity",
+      "organizationId": "traillife-pa-2301",
+      "question": "How do your program standards address gender identity while treating every person with dignity?",
+      "answer": "We hold to a biblical understanding of identity and operate as a boy-focused program. We also believe our convictions must be expressed with humility and care. We do not demean people; we seek to serve faithfully, speak truthfully, and treat others with respect.",
+      "source": "tone-guidance",
+      "updatedAt": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "trail_pa2301_religious_conviction",
+      "organizationId": "traillife-pa-2301",
+      "question": "How do you maintain religious convictions while serving the broader community?",
+      "answer": "Our Christian faith shapes why and how we serve. We welcome respectful conversation, care about our neighbors, and seek the good of the community while remaining clear and steady about our biblical beliefs.",
+      "source": "tone-guidance",
+      "updatedAt": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "emerging-entrepreneurs-academy_onboard_1",
+      "organizationId": "emerging-entrepreneurs-academy",
+      "question": "What are the eligibility requirements for the Emerging Entrepreneurs Academy summer program?",
+      "answer": "The program is open to students in the 10th, 11th, and 12th grades who possess an interest in starting and owning a business. The program specifically targets students within Berks and Lancaster counties.",
+      "source": "website-onboarding",
+      "updatedAt": "2026-06-09T13:37:04.012Z"
+    },
+    {
+      "id": "emerging-entrepreneurs-academy_onboard_2",
+      "organizationId": "emerging-entrepreneurs-academy",
+      "question": "How does the EEA program ensure students gain practical experience?",
+      "answer": "EEA integrates a hands-on internship component where students are matched with local businesses based on their industry of interest. This field training occurs during weeks 2, 4, and 6 of the summer program, requiring a minimum of 10 to 20 hours of work per week.",
+      "source": "website-onboarding",
+      "updatedAt": "2026-06-09T13:37:04.012Z"
+    },
+    {
+      "id": "emerging-entrepreneurs-academy_onboard_3",
+      "organizationId": "emerging-entrepreneurs-academy",
+      "question": "What topics are covered in the EEA curriculum?",
+      "answer": "The curriculum covers fundamental entrepreneurship, market analysis, leadership, legal business entity creation, financing, business projections, risk management, advertising, digital media, brand building, sales, human resources, and work/life balance.",
+      "source": "website-onboarding",
+      "updatedAt": "2026-06-09T13:37:04.012Z"
+    }
+  ]
+}
