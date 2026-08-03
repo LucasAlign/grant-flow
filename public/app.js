@@ -1,437 +1,679 @@
-const routes = {
-  "/": renderDashboard,
-  "/onboarding": renderOnboarding,
-  "/profile": renderProfile,
-  "/answers": renderAnswers,
-  "/documents": renderDocuments,
-  "/drafts": renderDrafts,
-  "/applications": renderApplications,
-  "/mock-grant": renderMockGrant
+/* Grant Flow — split-screen grant assistant. Vanilla JS, no build step. */
+
+const state = {
+  tab: "dashboard",
+  loading: true,
+  error: "",
+  status: null,
+  profile: null,
+  answers: [],
+  applications: [],
+  ui: {
+    orgSwitcherOpen: false,
+    appModal: null, // { mode: 'add' | 'edit', data: {...} } | null
+    answerModal: null, // { mode: 'add' | 'edit', data: {...} } | null
+    answerSearch: "",
+    draftQuestion: "",
+    draftAnswer: "",
+    draftBusy: false,
+    profileDraft: null,
+    guideOs: "win",
+  },
 };
 
-const app = document.querySelector("#app");
+const NAV = [
+  { id: "dashboard", label: "Dashboard", icon: "◧", eyebrow: "Overview", title: "Dashboard", sub: "Every application, one glance." },
+  { id: "answers", label: "Answer library", icon: "✎", eyebrow: "Split-screen autofill", title: "Answer library", sub: "Write it once here, then copy it into the form on your other half." },
+  { id: "profile", label: "Profile", icon: "◔", eyebrow: "Organization info", title: "Profile", sub: "The facts that stay the same on every application." },
+  { id: "guide", label: "Split-screen guide", icon: "⛶", eyebrow: "Setup", title: "Put Grant Flow in split screen", sub: "Two minutes, once, and you're set for every grant." },
+];
 
-function nav() {
-  return `
-    <header class="topbar">
-      <div class="brand">GrantFlow Assistant</div>
-      <nav class="nav">
-        <a href="/">Dashboard</a>
-        <a href="/onboarding">AI Onboarding</a>
-        <a href="/mock-grant">Mock Grant</a>
-        <a href="/profile">Profile</a>
-        <a href="/answers">Answers</a>
-        <a href="/documents">Documents</a>
-        <a href="/applications">Workspaces</a>
-        <a href="/drafts">Drafts</a>
-      </nav>
-    </header>`;
-}
+const STATUS_STYLE = {
+  draft: { label: "Draft", color: "var(--ink-soft)", bg: "var(--line-soft)" },
+  working: { label: "In progress", color: "var(--forest)", bg: "var(--forest-tint)" },
+  submitted: { label: "Submitted", color: "var(--slate)", bg: "var(--slate-tint)" },
+  awarded: { label: "Awarded", color: "var(--mint)", bg: "var(--mint-tint)" },
+  declined: { label: "Declined", color: "var(--coral)", bg: "var(--coral-tint)" },
+};
 
-async function api(path, options) {
-  const response = await fetch(path, {
+const app = document.getElementById("app");
+
+/* ---------------- API ---------------- */
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    method: options.method || "GET",
     headers: { "Content-Type": "application/json" },
-    ...options
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
-  if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
-    try {
-      const payload = await response.json();
-      if (payload.error) message = payload.error;
-    } catch {
-      // Keep the HTTP status when the response is not JSON.
-    }
-    throw new Error(message);
+  let data = {};
+  try { data = await res.json(); } catch { /* no body */ }
+  if (!res.ok || data.error) throw new Error(data.error || `Request to ${path} failed`);
+  return data;
+}
+
+async function loadAll() {
+  state.loading = true;
+  render();
+  try {
+    const [status, profile, answers, applications] = await Promise.all([
+      api("/api/status"),
+      api("/api/profile"),
+      api("/api/answers"),
+      api("/api/applications"),
+    ]);
+    state.status = status;
+    state.profile = profile;
+    state.answers = answers.items || [];
+    state.applications = applications.items || [];
+    state.error = "";
+  } catch (err) {
+    state.error = err.message || "Could not reach Grant Flow's server.";
+  } finally {
+    state.loading = false;
+    render();
   }
-  return response.json();
 }
 
-function mount(html) {
-  app.innerHTML = nav() + `<main>${html}</main>`;
+/* ---------------- helpers ---------------- */
+function esc(str = "") {
+  return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-async function renderDashboard() {
-  const status = await api("/api/status");
-  const profile = await api("/api/profile");
-  mount(`
-    <section class="hero">
-      <div class="panel">
-        <h1>Lucas Align grant-writing copilot demo hub</h1>
-        <p>Use this dashboard to test the local app, the mock grant form, organization profiles, and saved draft sessions.</p>
-        <span class="status-pill">${status.aiConfigured ? `${status.aiProvider} API connected` : "API key missing: fallback answers enabled"}</span>
-        <span class="status-pill">Active organization: ${escapeHtml(status.activeOrganization || "None selected")}</span>
-        <div class="dashboard-switcher">
-          <label for="dashboardOrgSelect">Apply grants as</label>
-          <select id="dashboardOrgSelect">
-            ${(profile.organizations || []).map((org) => `<option value="${escapeAttr(org.id)}" ${org.id === profile.activeOrganizationId ? "selected" : ""}>${escapeHtml(org.organization)}</option>`).join("")}
-          </select>
-          <div id="dashboardOrgStatus" class="small">Drafting, answers, documents, learning, and extension requests use this active organization.</div>
+function toast(message) {
+  let el = document.querySelector(".gf-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "gf-toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 1800);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Copied — paste it into your grant portal");
+  } catch {
+    toast("Couldn't copy automatically — select and copy manually");
+  }
+}
+
+function initials(name = "") {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
+}
+
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const target = new Date(dateStr);
+  if (Number.isNaN(target.getTime())) return null;
+  const diff = Math.ceil((target - new Date()) / 86400000);
+  return diff;
+}
+
+function statusMeta(status) {
+  return STATUS_STYLE[status] || STATUS_STYLE.working;
+}
+
+/* ---------------- render shell ---------------- */
+function render() {
+  const active = NAV.find((n) => n.id === state.tab);
+  app.innerHTML = `
+    <div class="gf-root">
+      <div class="gf-rail">
+        <div class="gf-rail-logo" title="Grant Flow">G</div>
+        ${NAV.map((n) => `
+          <button class="gf-rail-btn ${state.tab === n.id ? "active" : ""}" data-tab="${n.id}" aria-label="${n.label}">
+            <span aria-hidden="true">${n.icon}</span>
+            <span class="gf-rail-tip">${n.label}</span>
+          </button>
+        `).join("")}
+        <div class="gf-rail-spacer"></div>
+        ${state.profile ? `<button class="gf-rail-org" id="orgSwitchBtn" title="Switch organization">${esc(initials(state.profile.organization))}</button>` : ""}
+      </div>
+      <div class="gf-main">
+        <div class="gf-topbar">
+          <div class="gf-eyebrow">${active.eyebrow}</div>
+          <h1 class="gf-title gf-display">${active.title}</h1>
+          <div class="gf-sub">${active.sub}</div>
+        </div>
+        <div class="gf-body" id="gfBody">
+          ${state.loading ? renderLoading() : state.error ? renderError() : renderTab()}
         </div>
       </div>
-      <div class="panel">
-        <h2>Demo Flow</h2>
-        <p>Start the server, load the extension, open the mock grant, scan fields, draft answers, edit one, and fill the application.</p>
-      </div>
-    </section>
-    <section class="grid">
-      ${card("Mock grant application", "A long localhost application page tailored to Lucas Align grant requirements.", "/mock-grant")}
-      ${card("AI organization onboarding", "Add a new organization by scraping its public website into scoped grant-writing context.", "/onboarding")}
-      ${card("Editable profile", "Organization profile and public knowledge base used by the copilot.", "/profile")}
-      ${card("Answer library", "Saved reusable answers and extension edits for learning loop testing.", "/answers")}
-      ${card("Document context", "Simple text area for context pulled from grant docs or notes.", "/documents")}
-      ${card("Application workspaces", "Track funder, deadline, source URL, notes, final answers, and exports for each grant.", "/applications")}
-      ${card("Recent draft sessions", `${status.savedDraftSessions} saved sessions from extension/API drafting.`, "/drafts")}
-    </section>`);
+    </div>
+    ${state.ui.orgSwitcherOpen ? renderOrgSwitcher() : ""}
+    ${state.ui.appModal ? renderAppModal() : ""}
+    ${state.ui.answerModal ? renderAnswerModal() : ""}
+  `;
+  wireGlobal();
+  if (!state.loading && !state.error) wireTab();
+  if (state.ui.orgSwitcherOpen) wireOrgSwitcher();
+  if (state.ui.appModal) wireAppModal();
+  if (state.ui.answerModal) wireAnswerModal();
+}
 
-  document.querySelector("#dashboardOrgSelect")?.addEventListener("change", async (event) => {
-    const statusEl = document.querySelector("#dashboardOrgStatus");
-    statusEl.textContent = "Switching active organization...";
-    const nextProfile = await api("/api/profile/active", { method: "PUT", body: JSON.stringify({ id: event.target.value }) });
-    statusEl.textContent = `Active organization set to ${nextProfile.organization}.`;
-    renderDashboard();
+function renderLoading() {
+  return `<div class="gf-empty">Loading your grants…</div>`;
+}
+
+function renderError() {
+  return `
+    <div class="gf-empty">
+      ${esc(state.error)}<br/><br/>
+      <button class="gf-btn gf-btn-primary gf-btn-sm" id="retryBtn">Try again</button>
+    </div>
+  `;
+}
+
+function renderTab() {
+  if (state.tab === "dashboard") return renderDashboard();
+  if (state.tab === "answers") return renderAnswers();
+  if (state.tab === "profile") return renderProfile();
+  if (state.tab === "guide") return renderGuide();
+  return "";
+}
+
+function wireGlobal() {
+  app.querySelectorAll("[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => { state.tab = btn.dataset.tab; render(); });
   });
+  const orgBtn = document.getElementById("orgSwitchBtn");
+  if (orgBtn) orgBtn.addEventListener("click", () => { state.ui.orgSwitcherOpen = true; render(); });
+  const retryBtn = document.getElementById("retryBtn");
+  if (retryBtn) retryBtn.addEventListener("click", loadAll);
 }
 
-function card(title, body, href) {
-  return `<article class="card"><h3>${title}</h3><p>${body}</p><a href="${href}">Open</a></article>`;
+/* ---------------- dashboard ---------------- */
+function renderDashboard() {
+  const apps = state.applications;
+  const activeCount = apps.filter((a) => !["awarded", "declined"].includes(a.status)).length;
+  const next = apps
+    .map((a) => ({ a, d: daysUntil(a.deadline) }))
+    .filter((x) => x.d !== null && x.d >= 0)
+    .sort((x, y) => x.d - y.d)[0];
+
+  return `
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px;">
+      <div class="gf-card gf-hstack">
+        <div class="gf-mono" style="font-size:19px;font-weight:600;">${activeCount}</div>
+        <div style="font-size:12px;color:var(--ink-soft);">Active applications</div>
+      </div>
+      <div class="gf-card gf-hstack">
+        <div class="gf-mono" style="font-size:19px;font-weight:600;">${next ? `${next.d}d` : "—"}</div>
+        <div style="font-size:12px;color:var(--ink-soft);">${next ? "Next deadline" : "No upcoming deadlines"}</div>
+      </div>
+    </div>
+    <div class="gf-row" style="margin-bottom:10px;">
+      <div class="gf-display" style="font-size:16px;font-weight:600;">Your applications</div>
+      <button class="gf-btn gf-btn-primary gf-btn-sm" id="addAppBtn">+ New application</button>
+    </div>
+    ${apps.length === 0 ? `
+      <div class="gf-empty">
+        No applications yet. Add one for each grant you're working on — you'll track its deadline and status here,
+        then use the Answer library tab beside your portal to fill it in.
+      </div>
+    ` : `
+      <div class="gf-stack">
+        ${apps.map(renderAppCard).join("")}
+      </div>
+    `}
+  `;
 }
 
-async function renderOnboarding() {
-  mount(`
-    <h1>AI Organization Onboarding</h1>
-    <section class="panel">
-      <p>Enter a public website. GrantFlow will scrape a few relevant pages, summarize the organization, create scoped context, add answer examples, and make the organization active.</p>
-      <form id="onboardForm">
-        <div class="field-row"><label>Organization Name</label><input name="organization" placeholder="Example: Trail Life Troop PA 2301" required></div>
-        <div class="field-row"><label>Website URL</label><input name="website" placeholder="https://example.org" required></div>
-        <button>Scrape & Create Organization</button>
-      </form>
-      <div id="onboardStatus" class="small" style="margin-top:12px"></div>
-    </section>
-    <section id="onboardResult" class="list" style="margin-top:16px"></section>`);
-
-  document.querySelector("#onboardForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const status = document.querySelector("#onboardStatus");
-    const result = document.querySelector("#onboardResult");
-    status.textContent = "Scraping website and building organization profile...";
-    result.innerHTML = "";
-    try {
-      const data = Object.fromEntries(new FormData(event.target));
-      const response = await api("/api/onboard/website", { method: "POST", body: JSON.stringify(data) });
-      status.textContent = response.status;
-      result.innerHTML = `
-        <article class="card">
-          <h3>${escapeHtml(response.organization.organization)}</h3>
-          <p>Created from ${response.scrapedPages.length} scraped page(s). Added ${response.answerExamples} answer example(s). This organization is now active.</p>
-          <pre>${escapeHtml(response.scrapedPages.map((page) => page.url).join("\\n"))}</pre>
-          <div class="actions">
-            <a href="/profile">Review Profile</a>
-            <a href="/documents">Review Context</a>
-            <a href="/answers">Review Answers</a>
+function renderAppCard(a) {
+  const s = statusMeta(a.status);
+  const d = daysUntil(a.deadline);
+  return `
+    <div class="gf-card gf-hstack" style="align-items:flex-start;" data-app-id="${a.id}">
+      <div class="gf-stamp" style="color:${s.color};">${s.label}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="gf-row" style="align-items:flex-start;">
+          <div style="min-width:0;">
+            <div style="font-weight:600;font-size:14.5px;margin-bottom:2px;">${esc(a.applicationName || "Untitled application")}</div>
+            <div style="font-size:12.5px;color:var(--ink-soft);">${esc(a.funderName || "")}</div>
           </div>
-        </article>`;
-    } catch (error) {
-      status.textContent = `Unable to onboard: ${error.message}`;
-    }
-  });
-}
-
-async function renderProfile() {
-  const profile = await api("/api/profile");
-  mount(`
-    <h1>Organizations / Knowledge Base</h1>
-    <section class="panel" style="margin-bottom:16px">
-      <div class="field-row">
-        <label>Active Organization</label>
-        <select id="orgSelect">
-          ${(profile.organizations || []).map((org) => `<option value="${escapeAttr(org.id)}" ${org.id === profile.activeOrganizationId ? "selected" : ""}>${escapeHtml(org.organization)}</option>`).join("")}
-        </select>
-      </div>
-      <div class="actions">
-        <button id="addOrgBtn" type="button" class="secondary">Add Organization</button>
-      </div>
-    </section>
-    <form id="profileForm" class="panel">
-      <input type="hidden" name="id" value="${escapeAttr(profile.id || profile.activeOrganizationId || "")}">
-      <div class="field-row"><label>Organization</label><input name="organization" value="${escapeAttr(profile.organization)}"></div>
-      <div class="field-row"><label>Primary Contact</label><input name="primaryContact" value="${escapeAttr(profile.primaryContact || "")}"></div>
-      <div class="field-row"><label>Contact Title</label><input name="contactTitle" value="${escapeAttr(profile.contactTitle || "")}"></div>
-      <div class="field-row"><label>Contact Email</label><input name="contactEmail" value="${escapeAttr(profile.contactEmail || "")}"></div>
-      <div class="field-row"><label>EIN</label><input name="ein" value="${escapeAttr(profile.ein || "")}"></div>
-      <div class="field-row"><label>Tax Exempt No.</label><input name="taxExemptNo" value="${escapeAttr(profile.taxExemptNo || "")}"></div>
-      <div class="field-row"><label>Requested Amount Narrative</label><input name="requestedAmountNarrative" value="${escapeAttr(profile.requestedAmountNarrative || "")}"></div>
-      <div class="field-row"><label>Summary</label><textarea name="summary">${escapeHtml(profile.summary)}</textarea></div>
-      <div class="field-row"><label>Mission</label><textarea name="mission">${escapeHtml(profile.mission)}</textarea></div>
-      <div class="field-row"><label>Focus Areas, one per line</label><textarea name="focusAreas">${escapeHtml((profile.focusAreas || []).join("\n"))}</textarea></div>
-      <div class="field-row"><label>Voice</label><input name="voice" value="${escapeAttr(profile.voice)}"></div>
-      <button>Save Profile</button> <span id="saveStatus" class="small"></span>
-    </form>`);
-  document.querySelector("#orgSelect").addEventListener("change", async (event) => {
-    await api("/api/profile/active", { method: "PUT", body: JSON.stringify({ id: event.target.value }) });
-    renderProfile();
-  });
-  document.querySelector("#addOrgBtn").addEventListener("click", async () => {
-    const organization = prompt("Organization name");
-    if (!organization) return;
-    await api("/api/profile/organizations", { method: "POST", body: JSON.stringify({ organization }) });
-    renderProfile();
-  });
-  document.querySelector("#profileForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const data = Object.fromEntries(new FormData(event.target));
-    data.focusAreas = data.focusAreas.split("\n").map((line) => line.trim()).filter(Boolean);
-    await api("/api/profile", { method: "PUT", body: JSON.stringify(data) });
-    document.querySelector("#saveStatus").textContent = "Saved.";
-  });
-}
-
-async function renderAnswers() {
-  const profile = await api("/api/profile");
-  const answers = await api("/api/answers");
-  mount(`
-    <h1>Editable Answer Library</h1>
-    <p>Editing answers for ${escapeHtml(profile.organization)} only.</p>
-    <form id="answersForm" class="panel">
-      <div class="field-row"><label>Answer Library JSON</label><textarea name="json" style="min-height:420px">${escapeHtml(JSON.stringify(answers, null, 2))}</textarea></div>
-      <button>Save Answers</button> <span id="saveStatus" class="small"></span>
-    </form>`);
-  document.querySelector("#answersForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const parsed = JSON.parse(new FormData(event.target).get("json"));
-    await api("/api/answers", { method: "PUT", body: JSON.stringify(parsed) });
-    document.querySelector("#saveStatus").textContent = "Saved.";
-  });
-}
-
-async function renderDocuments() {
-  const profile = await api("/api/profile");
-  const documents = await api("/api/documents");
-  mount(`
-    <h1>Editable Document Context</h1>
-    <p>Editing document context for ${escapeHtml(profile.organization)} only.</p>
-    <form id="docsForm" class="panel">
-      <div class="field-row"><label>Simple Context Text</label><textarea name="context" style="min-height:360px">${escapeHtml(documents.context)}</textarea></div>
-      <button>Save Context</button> <span id="saveStatus" class="small"></span>
-    </form>`);
-  document.querySelector("#docsForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    await api("/api/documents", { method: "PUT", body: JSON.stringify(Object.fromEntries(new FormData(event.target))) });
-    document.querySelector("#saveStatus").textContent = "Saved.";
-  });
-}
-
-async function renderDrafts() {
-  const drafts = await api("/api/drafts");
-  mount(`
-    <h1>Recent Saved Draft Sessions</h1>
-    <section class="list">
-      ${(drafts.sessions || []).map((session) => `
-        <article class="card">
-          <h3>${session.createdAt} · ${session.fieldCount} fields</h3>
-          <p>${escapeHtml(session.status)} ${session.pageUrl ? `from ${escapeHtml(session.pageUrl)}` : ""}</p>
-          <pre>${escapeHtml(JSON.stringify(session.fields.slice(0, 5), null, 2))}</pre>
-        </article>`).join("") || `<p>No draft sessions yet.</p>`}
-    </section>`);
-}
-
-async function renderApplications() {
-  const profile = await api("/api/profile");
-  const applications = await api("/api/applications");
-  const drafts = await api("/api/drafts");
-  const latestDraft = (drafts.sessions || [])[0];
-  mount(`
-    <h1>Application Workspaces</h1>
-    <section class="panel">
-      <p>Track grant applications for ${escapeHtml(profile.organization)}. Save funder details, deadline, notes, and final answers; export when ready.</p>
-      <form id="applicationForm" class="workspace-form">
-        <div class="field-row"><label>Funder Name</label><input name="funderName" placeholder="Example Foundation" required></div>
-        <div class="field-row"><label>Application Name</label><input name="applicationName" placeholder="2026 Community Grant"></div>
-        <div class="field-row"><label>Deadline</label><input name="deadline" type="date"></div>
-        <div class="field-row"><label>Source URL</label><input name="sourceUrl" placeholder="https://..."></div>
-        <div class="field-row"><label>Notes</label><textarea name="notes" placeholder="Eligibility notes, funder priorities, next steps..."></textarea></div>
-        <div class="actions">
-          <button>Create Workspace</button>
-          <button id="importLatestDraftBtn" type="button" class="secondary" ${latestDraft ? "" : "disabled"}>Import Latest Draft</button>
+          <button class="gf-btn gf-btn-ghost gf-btn-sm edit-app-btn" data-id="${a.id}">Edit</button>
         </div>
-        <div id="applicationStatus" class="small"></div>
-      </form>
-    </section>
-    <section class="list workspace-list">
-      ${(applications.items || []).map(renderApplicationCard).join("") || `<p>No application workspaces yet.</p>`}
-    </section>`);
+        <div style="display:flex;align-items:center;gap:14px;margin-top:10px;font-size:12px;color:var(--ink-soft);flex-wrap:wrap;">
+          ${a.deadline ? `<span>Due ${esc(a.deadline)}${d !== null ? ` <span class="gf-mono">(${d >= 0 ? d + "d left" : "past"})</span>` : ""}</span>` : "<span>No deadline set</span>"}
+          ${a.sourceUrl ? `<a href="${esc(a.sourceUrl)}" target="_blank" rel="noopener" style="color:var(--slate);">Open portal ↗</a>` : ""}
+        </div>
+        ${a.notes ? `<div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;line-height:1.5;">${esc(a.notes)}</div>` : ""}
+      </div>
+    </div>
+  `;
+}
 
-  document.querySelector("#applicationForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const status = document.querySelector("#applicationStatus");
-    status.textContent = "Creating workspace...";
-    try {
-      const data = Object.fromEntries(new FormData(event.target));
-      await api("/api/applications", { method: "POST", body: JSON.stringify(data) });
-      status.textContent = "Workspace created.";
-      renderApplications();
-    } catch (error) {
-      status.textContent = `Unable to create workspace: ${error.message}`;
-    }
+function wireTab() {
+  if (state.tab === "dashboard") wireDashboard();
+  if (state.tab === "answers") wireAnswers();
+  if (state.tab === "profile") wireProfile();
+  if (state.tab === "guide") wireGuide();
+}
+
+function wireDashboard() {
+  const addBtn = document.getElementById("addAppBtn");
+  if (addBtn) addBtn.addEventListener("click", () => {
+    state.ui.appModal = { mode: "add", data: { funderName: "", applicationName: "", deadline: "", sourceUrl: "", status: "working", notes: "" } };
+    render();
   });
-
-  document.querySelector("#importLatestDraftBtn")?.addEventListener("click", async () => {
-    if (!latestDraft) return;
-    const status = document.querySelector("#applicationStatus");
-    status.textContent = "Importing latest draft...";
-    try {
-      const data = Object.fromEntries(new FormData(document.querySelector("#applicationForm")));
-      await api("/api/applications/from-draft", {
-        method: "POST",
-        body: JSON.stringify({
-          ...data,
-          draftId: latestDraft.id,
-          applicationName: data.applicationName || `Workspace from ${latestDraft.createdAt}`,
-          sourceUrl: data.sourceUrl || latestDraft.pageUrl || ""
-        })
-      });
-      status.textContent = "Latest draft imported.";
-      renderApplications();
-    } catch (error) {
-      status.textContent = `Unable to import draft: ${error.message}`;
-    }
-  });
-
-  document.querySelectorAll(".workspace-editor").forEach((form) => {
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const data = Object.fromEntries(new FormData(event.target));
-      const status = event.target.querySelector(".workspace-save-status");
-      status.textContent = "Saving...";
-      try {
-        data.finalAnswers = JSON.parse(data.finalAnswers || "[]");
-        await api("/api/applications", { method: "PUT", body: JSON.stringify(data) });
-        status.textContent = "Saved.";
-      } catch (error) {
-        status.textContent = `Unable to save: ${error.message}`;
-      }
+  app.querySelectorAll(".edit-app-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const item = state.applications.find((a) => a.id === btn.dataset.id);
+      if (item) { state.ui.appModal = { mode: "edit", data: { ...item } }; render(); }
     });
   });
 }
 
-function renderApplicationCard(item) {
-  const answers = JSON.stringify(item.finalAnswers || [], null, 2);
+function renderAppModal() {
+  const { mode, data } = state.ui.appModal;
   return `
-    <article class="card workspace-card">
-      <form class="workspace-editor">
-        <input type="hidden" name="id" value="${escapeAttr(item.id)}">
-        <div class="workspace-card-head">
-          <div>
-            <h3>${escapeHtml(item.applicationName || item.funderName || "Untitled application")}</h3>
-            <p>${escapeHtml(item.funderName || "No funder saved")} ${item.deadline ? `| Deadline ${escapeHtml(item.deadline)}` : ""}</p>
-          </div>
-          <select name="status">
-            ${["working", "review", "submitted", "declined", "awarded"].map((status) => `<option value="${status}" ${item.status === status ? "selected" : ""}>${status}</option>`).join("")}
+    <div class="gf-modal-overlay" id="appModalOverlay">
+      <div class="gf-modal">
+        <div class="gf-row" style="margin-bottom:14px;">
+          <div class="gf-display" style="font-size:16px;font-weight:600;">${mode === "add" ? "New application" : "Edit application"}</div>
+          <button class="gf-btn gf-btn-ghost gf-btn-sm" id="appModalClose">Close</button>
+        </div>
+        <div class="gf-field"><label class="gf-label">Funder name</label><input class="gf-input" id="fFunder" value="${esc(data.funderName)}" /></div>
+        <div class="gf-field"><label class="gf-label">Application name</label><input class="gf-input" id="fName" value="${esc(data.applicationName)}" /></div>
+        <div class="gf-field"><label class="gf-label">Deadline</label><input class="gf-input" type="date" id="fDeadline" value="${esc(data.deadline)}" /></div>
+        <div class="gf-field"><label class="gf-label">Portal link</label><input class="gf-input" id="fUrl" placeholder="https://" value="${esc(data.sourceUrl)}" /></div>
+        <div class="gf-field">
+          <label class="gf-label">Status</label>
+          <select class="gf-select" id="fStatus">
+            ${Object.entries(STATUS_STYLE).map(([k, v]) => `<option value="${k}" ${data.status === k ? "selected" : ""}>${v.label}</option>`).join("")}
           </select>
         </div>
-        <div class="workspace-fields">
-          <div class="field-row"><label>Funder</label><input name="funderName" value="${escapeAttr(item.funderName || "")}"></div>
-          <div class="field-row"><label>Application</label><input name="applicationName" value="${escapeAttr(item.applicationName || "")}"></div>
-          <div class="field-row"><label>Deadline</label><input name="deadline" type="date" value="${escapeAttr(item.deadline || "")}"></div>
-          <div class="field-row"><label>Source URL</label><input name="sourceUrl" value="${escapeAttr(item.sourceUrl || "")}"></div>
+        <div class="gf-field"><label class="gf-label">Notes</label><textarea class="gf-textarea" id="fNotes">${esc(data.notes)}</textarea></div>
+        <div class="gf-hstack" style="margin-top:6px;">
+          <button class="gf-btn gf-btn-primary" id="appModalSave">${mode === "add" ? "Add application" : "Save changes"}</button>
+          <button class="gf-btn gf-btn-ghost" id="appModalCancel">Cancel</button>
         </div>
-        <div class="field-row"><label>Notes</label><textarea name="notes">${escapeHtml(item.notes || "")}</textarea></div>
-        <div class="field-row"><label>Final Answers JSON</label><textarea name="finalAnswers" class="answers-json">${escapeHtml(answers)}</textarea></div>
-        <div class="actions">
-          <button>Save Workspace</button>
-          <a href="/api/applications/export?id=${encodeURIComponent(item.id)}&format=markdown" target="_blank" rel="noreferrer">Markdown</a>
-          <a href="/api/applications/export?id=${encodeURIComponent(item.id)}&format=json" target="_blank" rel="noreferrer">JSON</a>
-          <span class="small workspace-save-status"></span>
-        </div>
-      </form>
-    </article>`;
-}
-
-function renderMockGrant() {
-  const fields = [
-    ["mission", "Mission and Community Need", "Describe your mission and the community need this grant will address."],
-    ["population-served", "Population Served", "Who will be served by this program? Include ages, families, volunteers, and community groups where relevant."],
-    ["community-need", "Community Need", "What local need or gap does your organization address?"],
-    ["program-model", "Program Model", "Explain how your program works and what participants experience."],
-    ["program-activities", "Core Activities", "Describe the regular activities, events, meetings, or services supported by this request."],
-    ["participant-journey", "Participant Journey", "What does a participant experience from first involvement through deeper engagement?"],
-    ["leadership-development", "Leadership Development", "How does your program develop leadership, responsibility, or maturity?"],
-    ["character-development", "Character Development", "How does your program build character, integrity, service, and resilience?"],
-    ["mentoring", "Mentoring and Adult Support", "Describe the role of adult mentors, trained leaders, parents, or volunteers."],
-    ["volunteers", "Volunteer Engagement", "How do volunteers participate, lead, and sustain the work?"],
-    ["family-engagement", "Family Engagement", "How are parents, guardians, or families involved in the program?"],
-    ["faith-identity", "Faith Identity", "If your organization is faith-based, describe how faith informs the mission and program."],
-    ["biblical-values", "Biblical Values", "How do biblical values shape your approach to service, leadership, character, and community?"],
-    ["religious-conviction", "Religious Conviction and Public Benefit", "How do you maintain your religious convictions while serving the broader community with respect and care?"],
-    ["lgbtq-respect", "LGBTQ+ Respect and Religious Beliefs", "How would your organization respond to concerns about LGBTQ+ inclusion while remaining faithful to your beliefs?"],
-    ["gender-identity", "Gender Identity and Program Standards", "How do your program standards address gender identity while treating every person with dignity?"],
-    ["nondiscrimination", "Nondiscrimination and Eligibility", "Describe who may participate, how eligibility is determined, and how your organization avoids hostility or mistreatment."],
-    ["cultural-humility", "Cultural Humility", "How does your organization show kindness, humility, and respect toward people who do not share your beliefs?"],
-    ["conflict-resolution", "Sensitive Questions and Conflict Resolution", "How would your leaders respond if a family, funder, or community member disagrees with your beliefs?"],
-    ["safety", "Participant Safety", "Describe your approach to child safety, supervision, screening, and risk management."],
-    ["privacy", "Privacy and Confidentiality", "How do you protect participant and family privacy?"],
-    ["outcomes", "Outcomes and Measurement", "What outcomes will be measured and reported?"],
-    ["short-term-outcomes", "Short-Term Outcomes", "What changes do you expect participants to experience in the first grant period?"],
-    ["long-term-impact", "Long-Term Impact", "What lasting impact do you hope this work will have on participants, families, and the community?"],
-    ["evidence", "Evidence of Need or Effectiveness", "What evidence, experience, or observations show that this program matters?"],
-    ["budget-narrative", "Budget Narrative", "Explain how requested funds will be used."],
-    ["equipment-supplies", "Equipment and Supplies", "What materials, equipment, supplies, or curriculum will the grant help provide?"],
-    ["scholarships", "Scholarships and Access", "Will funds help reduce cost barriers for participants or families?"],
-    ["staffing-volunteers", "Staffing and Volunteer Support", "How will staff or volunteer leaders be trained, supported, or equipped?"],
-    ["sustainability", "Sustainability", "How will the program continue after grant funding?"],
-    ["reporting", "Reporting", "Describe reporting cadence, data quality, and partner visibility."],
-    ["financial-stewardship", "Financial Stewardship", "How will you manage grant funds responsibly and transparently?"],
-    ["donor-stewardship", "Donor Stewardship", "How will you communicate impact to funders and partners?"],
-    ["foundation-fit", "Foundation Fit", "Why is this request a strong fit for the foundation's priorities?"],
-    ["implementation", "Implementation Timeline", "Summarize launch, training, pilot, and expansion milestones."],
-    ["risk-management", "Risk Management", "Identify major risks and mitigation steps."],
-    ["partnerships", "Partnerships", "Describe collaboration with churches, schools, nonprofits, civic groups, or community partners."],
-    ["community-service", "Community Service", "How does your program encourage participants to serve others?"],
-    ["accessibility", "Accessibility", "How do you make the program accessible to families with financial, transportation, schedule, or other barriers?"],
-    ["rural-urban", "Service Area", "Describe the geographic area served and any rural, suburban, or urban considerations."],
-    ["communications", "Community Communications", "How do you explain your mission to families, partners, and funders clearly and respectfully?"],
-    ["collaboration-limits", "Partnership Boundaries", "Are there any values, doctrine, or program standards that shape which partnerships are appropriate?"],
-    ["evaluation", "Evaluation Plan", "How will learning from the project improve future service?"],
-    ["future-growth", "Future Growth", "How could this grant help the program grow or serve more participants over time?"],
-    ["closing-statement", "Closing Statement", "Briefly summarize why this request matters now."]
-  ];
-  mount(`
-    <h1>Mock Foundation Grant Application</h1>
-    <p>This localhost form is intentionally long so the extension can scan, draft, edit, and fill realistic application fields.</p>
-    <form id="grantForm">
-      <section class="form-section">
-        <div class="field-row"><label for="organization-name">Organization Name</label><input id="organization-name" name="organizationName" type="text" value="Lucas Align"></div>
-        <div class="field-row"><label for="contact-name">Primary Contact</label><input id="contact-name" name="contactName" type="text"></div>
-        <div class="field-row"><label for="requested-amount">Requested Amount Narrative</label><input id="requested-amount" name="requestedAmountNarrative" type="text"></div>
-      </section>
-      ${fields.map(([id, label, help]) => `
-        <section class="form-section">
-          <label for="${id}">${label}</label>
-          <p class="small">${help}</p>
-          <textarea id="${id}" name="${id}" placeholder="${escapeAttr(help)}"></textarea>
-        </section>`).join("")}
-      <div class="actions">
-        <button type="button" class="secondary">Save Draft Locally</button>
-        <button type="button" class="secondary">Preview Only</button>
       </div>
-    </form>`);
+    </div>
+  `;
 }
 
-function escapeHtml(value = "") {
-  return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+function wireAppModal() {
+  const close = () => { state.ui.appModal = null; render(); };
+  const overlay = document.getElementById("appModalOverlay");
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.getElementById("appModalClose").addEventListener("click", close);
+  document.getElementById("appModalCancel").addEventListener("click", close);
+  document.getElementById("appModalSave").addEventListener("click", async () => {
+    const { mode, data } = state.ui.appModal;
+    const payload = {
+      id: data.id,
+      funderName: document.getElementById("fFunder").value.trim(),
+      applicationName: document.getElementById("fName").value.trim(),
+      deadline: document.getElementById("fDeadline").value.trim(),
+      sourceUrl: document.getElementById("fUrl").value.trim(),
+      status: document.getElementById("fStatus").value,
+      notes: document.getElementById("fNotes").value.trim(),
+    };
+    try {
+      if (mode === "add") {
+        const item = await api("/api/applications", { method: "POST", body: payload });
+        state.applications = [item, ...state.applications];
+        toast("Application added");
+      } else {
+        const item = await api("/api/applications", { method: "PUT", body: payload });
+        state.applications = state.applications.map((a) => (a.id === item.id ? item : a));
+        toast("Saved");
+      }
+      state.ui.appModal = null;
+      render();
+    } catch (err) {
+      toast(err.message || "Couldn't save that");
+    }
+  });
 }
 
-function escapeAttr(value = "") {
-  return escapeHtml(value);
+/* ---------------- answer library / autofill ---------------- */
+function renderAnswers() {
+  const q = state.ui.answerSearch.toLowerCase();
+  const filtered = state.answers.filter((a) => (a.question + " " + a.answer).toLowerCase().includes(q));
+
+  return `
+    <div class="gf-card" style="margin-bottom:16px;">
+      <div class="gf-label" style="margin-bottom:6px;">Draft a new answer</div>
+      <textarea class="gf-textarea" id="draftQuestion" placeholder="Paste the question from your grant form…">${esc(state.ui.draftQuestion)}</textarea>
+      <div class="gf-hstack" style="margin-top:8px;">
+        <button class="gf-btn gf-btn-brass gf-btn-sm" id="draftBtn" ${state.ui.draftBusy ? "disabled" : ""}>${state.ui.draftBusy ? "Drafting…" : "Draft with AI"}</button>
+        ${state.status && !state.status.aiConfigured ? `<span style="font-size:11.5px;color:var(--ink-soft);">No AI key set — you'll get a fallback draft to edit by hand.</span>` : ""}
+      </div>
+      ${state.ui.draftAnswer ? `
+        <div class="gf-card" style="margin-top:10px;background:var(--forest-tint);border-color:var(--forest);">
+          <div style="font-size:13px;line-height:1.5;">${esc(state.ui.draftAnswer)}</div>
+          <div class="gf-hstack" style="margin-top:10px;">
+            <button class="gf-btn gf-btn-primary gf-btn-sm" id="draftCopyBtn">Copy</button>
+            <button class="gf-btn gf-btn-ghost gf-btn-sm" id="draftSaveBtn">Save to library</button>
+          </div>
+        </div>
+      ` : ""}
+    </div>
+
+    <input class="gf-input" id="answerSearch" placeholder="Search your saved answers" value="${esc(state.ui.answerSearch)}" style="margin-bottom:12px;" />
+
+    <div class="gf-row" style="margin-bottom:10px;">
+      <div class="gf-display" style="font-size:15px;font-weight:600;">Saved answers <span class="gf-mono" style="font-size:12px;color:var(--ink-soft);">(${filtered.length})</span></div>
+      <button class="gf-btn gf-btn-ghost gf-btn-sm" id="addAnswerBtn">+ Add manually</button>
+    </div>
+
+    ${filtered.length === 0 ? `
+      <div class="gf-empty">${state.answers.length === 0 ? "No saved answers yet. Draft one above, or add one manually." : "No answers match that search."}</div>
+    ` : `
+      <div class="gf-stack">
+        ${filtered.map(renderAnswerCard).join("")}
+      </div>
+    `}
+  `;
 }
 
-window.addEventListener("popstate", () => (routes[location.pathname] || renderDashboard)());
-document.addEventListener("click", (event) => {
-  const link = event.target.closest("a[href^='/']");
-  if (!link) return;
-  event.preventDefault();
-  history.pushState({}, "", link.href);
-  (routes[location.pathname] || renderDashboard)();
-});
+function renderAnswerCard(a) {
+  const title = a.question.split("|")[0].trim();
+  return `
+    <div class="gf-card" style="padding:12px;">
+      <div style="font-weight:600;font-size:13.5px;">${esc(title)}</div>
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;line-height:1.5;">${esc(a.answer)}</div>
+      <div class="gf-hstack" style="margin-top:10px;">
+        <button class="gf-btn gf-btn-primary gf-btn-sm copy-answer-btn" data-id="${a.id}">Copy</button>
+        <button class="gf-btn gf-btn-ghost gf-btn-sm edit-answer-btn" data-id="${a.id}">Edit</button>
+        <button class="gf-btn gf-btn-danger gf-btn-sm delete-answer-btn" data-id="${a.id}">Delete</button>
+      </div>
+    </div>
+  `;
+}
 
-(routes[location.pathname] || renderDashboard)();
+function wireAnswers() {
+  const search = document.getElementById("answerSearch");
+  search.addEventListener("input", () => { state.ui.answerSearch = search.value; render(); document.getElementById("answerSearch").focus(); document.getElementById("answerSearch").selectionStart = document.getElementById("answerSearch").value.length; });
+
+  const draftQ = document.getElementById("draftQuestion");
+  draftQ.addEventListener("input", () => { state.ui.draftQuestion = draftQ.value; });
+
+  document.getElementById("draftBtn").addEventListener("click", async () => {
+    const question = state.ui.draftQuestion.trim();
+    if (!question) { toast("Paste a question first"); return; }
+    state.ui.draftBusy = true; render();
+    try {
+      const res = await api("/api/chat", { method: "POST", body: { question, fields: [] } });
+      state.ui.draftAnswer = res.answer || "";
+    } catch (err) {
+      toast(err.message || "Couldn't draft that right now");
+    } finally {
+      state.ui.draftBusy = false; render();
+    }
+  });
+
+  const copyBtn = document.getElementById("draftCopyBtn");
+  if (copyBtn) copyBtn.addEventListener("click", () => copyText(state.ui.draftAnswer));
+
+  const saveBtn = document.getElementById("draftSaveBtn");
+  if (saveBtn) saveBtn.addEventListener("click", async () => {
+    await saveAnswers([...state.answers, {
+      id: `ans_${Date.now()}`,
+      question: state.ui.draftQuestion.trim(),
+      answer: state.ui.draftAnswer,
+      source: "chat-draft",
+      updatedAt: new Date().toISOString(),
+    }]);
+    state.ui.draftQuestion = "";
+    state.ui.draftAnswer = "";
+    toast("Saved to your answer library");
+    render();
+  });
+
+  document.getElementById("addAnswerBtn").addEventListener("click", () => {
+    state.ui.answerModal = { mode: "add", data: { question: "", answer: "" } };
+    render();
+  });
+
+  app.querySelectorAll(".copy-answer-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const item = state.answers.find((a) => a.id === btn.dataset.id);
+      if (item) copyText(item.answer);
+    });
+  });
+  app.querySelectorAll(".edit-answer-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const item = state.answers.find((a) => a.id === btn.dataset.id);
+      if (item) { state.ui.answerModal = { mode: "edit", data: { ...item } }; render(); }
+    });
+  });
+  app.querySelectorAll(".delete-answer-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Delete this saved answer?")) return;
+      await saveAnswers(state.answers.filter((a) => a.id !== btn.dataset.id));
+      toast("Deleted");
+      render();
+    });
+  });
+}
+
+async function saveAnswers(nextItems) {
+  try {
+    const res = await api("/api/answers", { method: "PUT", body: { items: nextItems } });
+    state.answers = res.items || [];
+  } catch (err) {
+    toast(err.message || "Couldn't save your answer library");
+  }
+}
+
+function renderAnswerModal() {
+  const { mode, data } = state.ui.answerModal;
+  return `
+    <div class="gf-modal-overlay" id="answerModalOverlay">
+      <div class="gf-modal">
+        <div class="gf-row" style="margin-bottom:14px;">
+          <div class="gf-display" style="font-size:16px;font-weight:600;">${mode === "add" ? "Add an answer" : "Edit answer"}</div>
+          <button class="gf-btn gf-btn-ghost gf-btn-sm" id="answerModalClose">Close</button>
+        </div>
+        <div class="gf-field"><label class="gf-label">Question</label><input class="gf-input" id="aQuestion" value="${esc(data.question)}" /></div>
+        <div class="gf-field"><label class="gf-label">Answer</label><textarea class="gf-textarea" id="aAnswer" style="min-height:100px;">${esc(data.answer)}</textarea></div>
+        <div class="gf-hstack" style="margin-top:6px;">
+          <button class="gf-btn gf-btn-primary" id="answerModalSave">Save</button>
+          <button class="gf-btn gf-btn-ghost" id="answerModalCancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function wireAnswerModal() {
+  const close = () => { state.ui.answerModal = null; render(); };
+  const overlay = document.getElementById("answerModalOverlay");
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.getElementById("answerModalClose").addEventListener("click", close);
+  document.getElementById("answerModalCancel").addEventListener("click", close);
+  document.getElementById("answerModalSave").addEventListener("click", async () => {
+    const { mode, data } = state.ui.answerModal;
+    const question = document.getElementById("aQuestion").value.trim();
+    const answer = document.getElementById("aAnswer").value.trim();
+    if (!question || !answer) { toast("Fill in both fields"); return; }
+    let nextItems;
+    if (mode === "add") {
+      nextItems = [...state.answers, { id: `ans_${Date.now()}`, question, answer, source: "manual", updatedAt: new Date().toISOString() }];
+    } else {
+      nextItems = state.answers.map((a) => (a.id === data.id ? { ...a, question, answer, updatedAt: new Date().toISOString() } : a));
+    }
+    await saveAnswers(nextItems);
+    state.ui.answerModal = null;
+    toast("Saved");
+    render();
+  });
+}
+
+/* ---------------- profile ---------------- */
+function renderProfile() {
+  const p = state.ui.profileDraft || state.profile;
+  const fields = [
+    ["organization", "Organization name"],
+    ["primaryContact", "Primary contact"],
+    ["contactTitle", "Contact title"],
+    ["contactEmail", "Contact email"],
+    ["mission", "Mission statement", "textarea"],
+    ["summary", "One-line summary", "textarea"],
+    ["requestedAmountNarrative", "Typical requested-amount language", "textarea"],
+  ];
+  return `
+    <div class="gf-card">
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;line-height:1.5;">
+        Fill this in once. It backs every AI draft and appears as a quick-copy source alongside your answer library.
+      </div>
+      <div class="gf-stack">
+        ${fields.map(([key, label, kind]) => `
+          <div>
+            <label class="gf-label">${label}</label>
+            ${kind === "textarea"
+              ? `<textarea class="gf-textarea" data-field="${key}">${esc(p[key] || "")}</textarea>`
+              : `<input class="gf-input" data-field="${key}" value="${esc(p[key] || "")}" />`}
+          </div>
+        `).join("")}
+      </div>
+      <button class="gf-btn gf-btn-primary" id="saveProfileBtn" style="margin-top:16px;">Save profile</button>
+    </div>
+  `;
+}
+
+function wireProfile() {
+  app.querySelectorAll("[data-field]").forEach((el) => {
+    el.addEventListener("input", () => {
+      state.ui.profileDraft = state.ui.profileDraft || { ...state.profile };
+      state.ui.profileDraft[el.dataset.field] = el.value;
+    });
+  });
+  document.getElementById("saveProfileBtn").addEventListener("click", async () => {
+    const payload = {};
+    app.querySelectorAll("[data-field]").forEach((el) => { payload[el.dataset.field] = el.value; });
+    try {
+      state.profile = await api("/api/profile", { method: "PUT", body: payload });
+      state.ui.profileDraft = null;
+      toast("Profile saved");
+      render();
+    } catch (err) {
+      toast(err.message || "Couldn't save your profile");
+    }
+  });
+}
+
+/* ---------------- org switcher ---------------- */
+function renderOrgSwitcher() {
+  const orgs = state.profile?.organizations || [];
+  return `
+    <div class="gf-modal-overlay" id="orgOverlay">
+      <div class="gf-modal">
+        <div class="gf-row" style="margin-bottom:14px;">
+          <div class="gf-display" style="font-size:16px;font-weight:600;">Switch organization</div>
+          <button class="gf-btn gf-btn-ghost gf-btn-sm" id="orgClose">Close</button>
+        </div>
+        <div class="gf-stack">
+          ${orgs.map((o) => `
+            <button class="gf-btn ${o.id === state.profile.activeOrganizationId ? "gf-btn-primary" : "gf-btn-ghost"}" style="justify-content:flex-start;" data-org-id="${o.id}">
+              ${esc(o.organization)}
+            </button>
+          `).join("")}
+        </div>
+        <div class="gf-hstack" style="margin-top:14px;">
+          <input class="gf-input" id="newOrgName" placeholder="New organization name" />
+          <button class="gf-btn gf-btn-brass gf-btn-sm" id="newOrgBtn">Add</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function wireOrgSwitcher() {
+  const close = () => { state.ui.orgSwitcherOpen = false; render(); };
+  const overlay = document.getElementById("orgOverlay");
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.getElementById("orgClose").addEventListener("click", close);
+  app.querySelectorAll("[data-org-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        state.profile = await api("/api/profile/active", { method: "PUT", body: { id: btn.dataset.orgId } });
+        const answers = await api("/api/answers");
+        const applications = await api("/api/applications");
+        state.answers = answers.items || [];
+        state.applications = applications.items || [];
+        state.ui.orgSwitcherOpen = false;
+        toast(`Switched to ${state.profile.organization}`);
+        render();
+      } catch (err) {
+        toast(err.message || "Couldn't switch organizations");
+      }
+    });
+  });
+  document.getElementById("newOrgBtn").addEventListener("click", async () => {
+    const name = document.getElementById("newOrgName").value.trim();
+    if (!name) return;
+    try {
+      state.profile = await api("/api/profile/organizations", { method: "POST", body: { organization: name } });
+      state.answers = [];
+      state.applications = [];
+      state.ui.orgSwitcherOpen = false;
+      toast(`${name} added`);
+      render();
+    } catch (err) {
+      toast(err.message || "Couldn't add that organization");
+    }
+  });
+}
+
+/* ---------------- split-screen guide ---------------- */
+const GUIDE_STEPS = {
+  win: [
+    { k: `<span class="gf-kbd">Win</span><span class="gf-kbd">←</span>`, t: "Snap Grant Flow left", d: "Click this window, then press the shortcut. It jumps to the left half instantly." },
+    { k: `<span class="gf-kbd">Click</span>`, t: "Choose the portal for the other half", d: "Windows shows your open windows as thumbnails — click your grant portal to fill the right side." },
+    { k: `<span class="gf-kbd">Drag</span>`, t: "Adjust the divider", d: "Drag the line between the two windows to give either side more room." },
+  ],
+  mac: [
+    { k: `<span class="gf-kbd">Hold</span> 🟢`, t: "Hold the green button", d: `Hover Grant Flow's green full-screen button until the tile menu appears, then choose "Tile Window to Left of Screen."` },
+    { k: `<span class="gf-kbd">Click</span>`, t: "Pick your grant portal", d: "macOS lists your other open windows — click the portal to snap it to the right half." },
+    { k: `<span class="gf-kbd">Drag</span>`, t: "Adjust the divider", d: "Drag the center line to resize either pane." },
+  ],
+};
+
+function renderGuide() {
+  const os = state.ui.guideOs;
+  const steps = GUIDE_STEPS[os];
+  return `
+    <div class="gf-hstack" style="margin-bottom:16px;">
+      <button class="gf-btn ${os === "win" ? "gf-btn-primary" : "gf-btn-ghost"}" data-os="win">Windows</button>
+      <button class="gf-btn ${os === "mac" ? "gf-btn-primary" : "gf-btn-ghost"}" data-os="mac">macOS</button>
+    </div>
+    <div class="gf-card" style="margin-bottom:16px;padding:18px;">
+      <div style="display:flex;gap:10px;height:90px;">
+        <div style="flex:1;background:var(--forest);border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11.5px;font-weight:600;">Grant Flow</div>
+        <div style="flex:1;background:var(--line-soft);border:1px dashed var(--ink-soft);border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-size:11.5px;font-weight:600;">Your grant portal</div>
+      </div>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;text-align:center;">What you're aiming for — Grant Flow on one side, the funder's form on the other</div>
+    </div>
+    <div class="gf-stack">
+      ${steps.map((s, i) => `
+        <div class="gf-card" style="display:flex;gap:14px;align-items:flex-start;">
+          <div class="gf-mono" style="width:22px;height:22px;border-radius:50%;background:var(--forest-tint);color:var(--forest);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px;">${i + 1}</div>
+          <div style="flex:1;">
+            <div class="gf-hstack" style="margin-bottom:3px;"><span style="font-weight:600;font-size:13.5px;">${s.t}</span>${s.k}</div>
+            <div style="font-size:12.5px;color:var(--ink-soft);line-height:1.5;">${s.d}</div>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+    <div style="font-size:11.5px;color:var(--ink-soft);margin-top:14px;">
+      Works the same way in both Chrome and Edge — the shortcut lives in Windows or macOS, not the browser.
+    </div>
+  `;
+}
+
+function wireGuide() {
+  app.querySelectorAll("[data-os]").forEach((btn) => {
+    btn.addEventListener("click", () => { state.ui.guideOs = btn.dataset.os; render(); });
+  });
+}
+
+/* ---------------- boot ---------------- */
+loadAll();
