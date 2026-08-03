@@ -1,16 +1,19 @@
-# GrantFlow Assistant
+# Grant Flow
 
-GrantFlow Assistant is a functional proof-of-concept for Lucas Align: a browser-native grant-writing copilot that drafts concise application answers from a local knowledge base, editable answer library, simple document context, and detected localhost form fields.
+Grant Flow is a split-screen grant-writing assistant. There's no browser extension to install: open the web app in one half of your screen, your grant portal in the other, and copy answers across as you go.
+
+**How it's meant to be used:** navigate to Grant Flow, navigate to your grant portal in a second window, put your browser into split screen (see the in-app Split-Screen Guide tab for Windows/Mac steps), and start filling out the application — pulling answers from your Answer Library and Profile with one click to copy.
 
 ## What Is Included
 
 - Node + Express local app/API at `http://localhost:3000`
-- Plain HTML/CSS/JS dashboard and mock grant application
+- A dashboard (`public/`) with four views: **Dashboard** (application tracker), **Answer Library** (reusable Q&A with one-click copy + AI drafting), **Profile** (org facts used by every draft), and **Split-Screen Guide** (Windows/Mac setup)
 - JSON dev data under `data/`
-- Chrome MV3 extension under `extension/`
 - OpenAI-backed drafting and chat through the local API
 - Clear fallback messages when `OPENAI_API_KEY` is missing
 - Lightweight API verification script
+
+The old Chrome extension (`extension/`) has been retired — its DOM-scanning approach relied on injecting into the grant portal's tab, which a plain web app can't do across origins. The dashboard, answer library, and AI drafting logic it depended on lived in `server.js` all along and needed no changes; only the fill mechanism changed, from automatic DOM injection to a one-click copy you paste into the portal yourself.
 
 ## Setup
 
@@ -57,39 +60,25 @@ GrantFlow Assistant is a functional proof-of-concept for Lucas Align: a browser-
 
    [http://localhost:3000](http://localhost:3000)
 
-## Load The Extension
+## Split-Screen Setup
 
-1. Open Chrome.
-2. Go to `chrome://extensions`.
-3. Enable Developer mode.
-4. Choose Load unpacked.
-5. Select the `extension/` folder in this project.
-6. Pin or click GrantFlow Assistant to open the side panel.
-
-The extension can scan normal `http` and `https` application pages. Chrome still blocks extensions on browser-internal pages such as `chrome://` and some protected store/login surfaces.
+1. Open [http://localhost:3000](http://localhost:3000) in one browser window.
+2. Open your grant portal in a second window.
+3. Snap the two side by side — the app's **Split-Screen Guide** tab walks through the Windows and Mac shortcuts.
+4. Work from the **Answer Library** tab: search or draft an answer, hit **Copy**, and paste it into the portal.
 
 ## Demo Flow
 
-1. Open [http://localhost:3000/mock-grant](http://localhost:3000/mock-grant).
-2. Open the GrantFlow Assistant side panel.
-3. Click Draft & Fill.
-4. GrantFlow scans supported fields, drafts concise answers, and fills the page without submitting.
-5. Review and approve answers directly in the application page.
-6. Use Pick & Fill to click or highlight one question, ask Gemini for a revision, and autofill that field.
-7. Use Review Application to check the current page answers for repeated answers, missing answers, length issues, unsupported claims, and values-alignment risks.
-8. Use Ask GrantFlow for a brief chat answer using the active organization, current scanned form context, and learning memory.
-9. View saved draft sessions at [http://localhost:3000/drafts](http://localhost:3000/drafts).
+1. Open [http://localhost:3000](http://localhost:3000).
+2. On the **Dashboard** tab, add an application (funder, deadline, portal link, status) to track it.
+3. On the **Answer Library** tab, paste a question from the portal into "Draft a new answer" and click **Draft with AI** — or search your existing saved answers.
+4. Click **Copy** on any answer and paste it into the portal field.
+5. Save new AI drafts to the library so they're reusable next time the same or a similar question comes up.
+6. On the **Profile** tab, keep organization facts (mission, contact, requested-amount language) up to date — every AI draft uses this as its source of truth.
 
-## Editable Demo Data
+## Editable Data
 
-- Profile and knowledge base: [http://localhost:3000/profile](http://localhost:3000/profile)
-- AI organization onboarding: [http://localhost:3000/onboarding](http://localhost:3000/onboarding)
-- Answer library: [http://localhost:3000/answers](http://localhost:3000/answers)
-- Document context: [http://localhost:3000/documents](http://localhost:3000/documents)
-- Application workspaces: [http://localhost:3000/applications](http://localhost:3000/applications)
-- Recent draft sessions: [http://localhost:3000/drafts](http://localhost:3000/drafts)
-
-Files are stored separately:
+Everything above is reachable from the in-app tabs (Dashboard, Answer Library, Profile). The underlying files are stored separately:
 
 - `data/profile.json`
 - `data/answers.json`
@@ -127,11 +116,10 @@ For a harsher local pass, run:
 npm run firetest
 ```
 
-The fire test starts an isolated server with AI keys disabled and checks fallback diagnostics, concurrent draft pressure, review edge cases, extension syntax, sensitive-field hardening, and contenteditable support.
+The fire test starts an isolated server with AI keys disabled and checks fallback diagnostics, concurrent draft pressure, and review edge cases.
 
 ## Notes
 
-- The content script scans only normal text inputs and textareas.
-- Sensitive-looking fields such as SSN, payment, bank, password, and token fields are skipped.
-- The extension never submits forms.
-- There are no copy-answer buttons and no per-field approval requirement before filling.
+- Grant Flow never touches the grant portal's page directly — it has no way to, and isn't trying to. Every answer is a deliberate copy-and-paste action you control.
+- Nothing submits on your behalf. You review and paste each answer yourself.
+- AI drafting always has a clear fallback message when no API key is configured, so the app is fully usable without one.
