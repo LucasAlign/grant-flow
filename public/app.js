@@ -844,6 +844,7 @@ function wireProfile() {
   document.getElementById("saveProfileBtn").addEventListener("click", async () => {
     const payload = {};
     app.querySelectorAll("[data-field]").forEach((el) => { payload[el.dataset.field] = el.value; });
+    payload.approveImportedContent = profileNeedsReview();
     if (!String(payload.organization || "").trim()) {
       toast("Organization name is required");
       const el = document.getElementById("pf_organization");
@@ -1038,6 +1039,7 @@ function wireOnboarding() {
   if (saveReview) saveReview.addEventListener("click", async () => {
     const payload = {};
     app.querySelectorAll("[data-onb-field]").forEach((el) => { payload[el.dataset.onbField] = el.value; });
+    payload.approveImportedContent = true;
     if (!String(payload.organization || "").trim()) { toast("Organization name is required"); return; }
     try {
       state.profile = await api("/api/profile", { method: "PUT", body: payload });

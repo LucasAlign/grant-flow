@@ -490,6 +490,36 @@ function scopedDocuments(documents, organizationId) {
   return { context: documents.context || "" };
 }
 
+async function approvePendingImport(organizationId) {
+  const documents = await readJson("documents");
+  const pending = documents.pendingImports?.[organizationId];
+  if (!pending) return { promotedAnswers: 0 };
+
+  documents.contexts = documents.contexts || {};
+  documents.contexts[organizationId] = String(pending.context || "");
+  delete documents.pendingImports[organizationId];
+  await writeJson("documents", documents);
+
+  const answers = await readJson("answers");
+  const imported = (pending.answerExamples || [])
+    .filter((item) => item.question && item.answer)
+    .slice(0, 12)
+    .map((item, index) => ({
+      id: `${organizationId}_onboard_${index + 1}`,
+      organizationId,
+      question: item.question,
+      answer: item.answer,
+      source: "website-onboarding",
+      updatedAt: new Date().toISOString()
+    }));
+  answers.items = [
+    ...(answers.items || []).filter((item) => !(item.organizationId === organizationId && item.source === "website-onboarding")),
+    ...imported
+  ];
+  await writeJson("answers", answers);
+  return { promotedAnswers: imported.length };
+}
+
 function scopedApplications(applications, organizationId) {
   return {
     items: (applications.items || [])
@@ -1222,18 +1252,23 @@ app.get("/api/status", async (_req, res) => {
 app.get("/api/profile", async (_req, res) => res.json(profileResponse(await readProfileStore())));
 app.put("/api/profile", async (req, res) => {
   const store = await readProfileStore();
+  const approveImportedContent = req.body.approveImportedContent === true;
+  const { approveImportedContent: _approval, ...profileFields } = req.body;
   store.organizations = store.organizations.map((org) => {
     if (org.id !== store.activeOrganizationId) return org;
-    const merged = { ...org, ...req.body, id: org.id };
+    const merged = { ...org, ...profileFields, id: org.id };
     // Saving a profile whose mission/summary now read as real (non-empty and not
     // raw scrape text) clears the "needs review" flag on imported organizations.
     const reviewed = Boolean(merged.mission || merged.summary)
       && !looksLikeScrape(merged.mission)
       && !looksLikeScrape(merged.summary);
-    if (reviewed) merged.needsReview = false;
+    if (reviewed && approveImportedContent) merged.needsReview = false;
     return merged;
   });
   await writeJson("profile", store);
+  if (approveImportedContent && !activeProfile(store).needsReview) {
+    await approvePendingImport(store.activeOrganizationId);
+  }
   res.json(profileResponse(store));
 });
 
@@ -1368,10 +1403,15 @@ app.post("/api/onboard/website", async (req, res) => {
 
   const documents = await readJson("documents");
   const nextDocuments = documents.contexts ? documents : { contexts: {} };
-  nextDocuments.contexts[id] = learned.context || fallback.context;
+  nextDocuments.pendingImports = nextDocuments.pendingImports || {};
+  nextDocuments.pendingImports[id] = {
+    context: learned.context || fallback.context,
+    answerExamples: Array.isArray(learned.answerExamples) ? learned.answerExamples : [],
+    importedAt: organization.importedAt,
+    importedFrom: website
+  };
   await writeJson("documents", nextDocuments);
 
-  const allAnswers = await readJson("answers");
   const examples = Array.isArray(learned.answerExamples) ? learned.answerExamples : [];
   const scopedExamples = examples
     .filter((item) => item.question && item.answer)
@@ -1384,16 +1424,16 @@ app.post("/api/onboard/website", async (req, res) => {
       source: "website-onboarding",
       updatedAt: new Date().toISOString()
     }));
-  allAnswers.items = [...(allAnswers.items || []), ...scopedExamples];
-  await writeJson("answers", allAnswers);
-  await writeOrganizationMarkdown(organization, nextDocuments.contexts[id], scopedExamples);
+  await writeOrganizationMarkdown(organization, "Pending human review; imported context is quarantined.", []);
 
   res.json({
     organization: profileResponse(store),
     scrapedPages: pages.map((page) => ({ url: page.url, title: page.title })),
     source: generated.source,
-    status: generated.ok ? "AI onboarding complete." : "Website scraped; fallback onboarding created.",
-    answerExamples: scopedExamples.length
+    status: generated.ok
+      ? "Website imported into quarantine; review the profile before using it in drafts."
+      : "Website text imported into quarantine; review the profile before using it in drafts.",
+    pendingAnswerExamples: scopedExamples.length
   });
 });
 

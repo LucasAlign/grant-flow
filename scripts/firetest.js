@@ -62,6 +62,18 @@ async function postJson(pathname, body, expectedStatus = 200) {
   return response.json();
 }
 
+async function putJson(pathname, body, expectedStatus = 200) {
+  const response = await fetch(`${BASE}${pathname}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (response.status !== expectedStatus) {
+    throw new Error(`${pathname}: expected ${expectedStatus}, got ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
 async function snapshotData() {
   const snapshot = {};
   for (const file of dataFiles) {
@@ -128,6 +140,46 @@ async function verifyReviewAndScoping() {
     const scoped = await getJson("/api/answers");
     assert(Array.isArray(scoped.items), "Scoped answers missing after switch.");
   }
+}
+
+async function verifyImportedContentQuarantine() {
+  const profile = await getJson("/api/profile");
+  const organizationId = profile.activeOrganizationId;
+  const pendingQuestion = "Pending import question";
+  const pendingContext = "Pending import context must stay quarantined.";
+
+  const documents = JSON.parse(await fs.readFile(path.join("data", "documents.json"), "utf8"));
+  documents.contexts = documents.contexts || {};
+  delete documents.contexts[organizationId];
+  documents.pendingImports = documents.pendingImports || {};
+  documents.pendingImports[organizationId] = {
+    context: pendingContext,
+    answerExamples: [{ question: pendingQuestion, answer: "Pending imported answer." }]
+  };
+  await fs.writeFile(path.join("data", "documents.json"), JSON.stringify(documents, null, 2));
+
+  const profileStore = JSON.parse(await fs.readFile(path.join("data", "profile.json"), "utf8"));
+  profileStore.organizations = profileStore.organizations.map((org) => (
+    org.id === organizationId ? { ...org, needsReview: true } : org
+  ));
+  await fs.writeFile(path.join("data", "profile.json"), JSON.stringify(profileStore, null, 2));
+
+  const hiddenDocuments = await getJson("/api/documents");
+  const hiddenAnswers = await getJson("/api/answers");
+  assert(hiddenDocuments.context === "", "Pending imported context leaked before approval.");
+  assert(!hiddenAnswers.items.some((item) => item.question === pendingQuestion), "Pending imported answer leaked before approval.");
+
+  const approved = await putJson("/api/profile", {
+    organization: profile.organization,
+    mission: "We serve our community through reviewed programs.",
+    summary: "A reviewed organization summary.",
+    approveImportedContent: true
+  });
+  assert(approved.needsReview === false, "Explicit approval did not clear the review state.");
+  const visibleDocuments = await getJson("/api/documents");
+  const visibleAnswers = await getJson("/api/answers");
+  assert(visibleDocuments.context === pendingContext, "Approved imported context was not promoted.");
+  assert(visibleAnswers.items.some((item) => item.question === pendingQuestion), "Approved imported answer was not promoted.");
 }
 
 function field(index, overrides = {}) {
@@ -220,6 +272,7 @@ async function main() {
     await verifyReviewFindsUglyCases();
     await verifyWorkspaceFlow();
     await verifyReviewAndScoping();
+    await verifyImportedContentQuarantine();
     await postJson("/api/onboard/website", {}, 400);
 
     console.log("GrantFlow fire test");
@@ -230,6 +283,7 @@ async function main() {
     console.log("Review pressure: missing, duplicate, length, claim, and budget issues");
     console.log("Workspace pressure: create, update, and Markdown export");
     console.log("Review + scoping: needsReview flags and organization-scoped answers");
+    console.log("Import quarantine: pending context and examples stay hidden until explicit approval");
     console.log("Result: OK");
   } finally {
     await restoreData(snapshot);
