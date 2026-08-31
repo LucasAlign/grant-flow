@@ -7,11 +7,15 @@
   "scripts": {
     "start": "node server.js",
     "verify": "node scripts/verify-api.js",
-    "firetest": "node scripts/firetest.js"
+    "firetest": "node scripts/firetest.js",
+    "browsercheck": "node scripts/browser-check.js"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "openai": "^4.78.1"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
   }
 }

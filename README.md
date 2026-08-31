@@ -108,7 +108,7 @@ Application workspaces in `data/applications.json` are also scoped by active org
 
 From the Setup flow's **import from a website** option (or `POST /api/onboard/website`), enter an organization name and public website. GrantFlow scrapes the homepage and a few relevant same-site pages, asks the configured AI model to extract grant-writing context, creates a new active organization, saves scoped document context and answer examples, and writes a Markdown reference under `data/organizations/`.
 
-Imported organizations start in a **Needs review** state. Raw scraped/navigation text is never written into the mission or summary as if it were a fact — those human-facing fields start blank (or are cleared if they still read as scraped) so you review and write them yourself. The scraped text is kept only as background context. If the AI key is missing or the model is unavailable, GrantFlow still creates the scoped organization with safe blanks and a review prompt rather than copying raw page text in.
+Imported organizations start in a **Needs review** state. Raw scraped/navigation text is never written into the mission or summary as if it were a fact — those human-facing fields start blank (or are cleared if they still read as scraped) so you review and write them yourself. Imported context and answer examples remain quarantined from drafting until you explicitly approve a complete mission and summary. If the AI key is missing or the model is unavailable, GrantFlow still creates the scoped organization with safe blanks and a review prompt rather than copying raw page text in.
 
 ## Verify The API
 
@@ -127,6 +127,14 @@ npm run firetest
 ```
 
 The fire test starts an isolated server with AI keys disabled and checks the missing-AI safety contract, fallback diagnostics, concurrent draft pressure, review edge cases, workspace CRUD/export, and organization scoping.
+
+For a real-browser accessibility and narrow split-screen check, run:
+
+```bash
+npm run browsercheck
+```
+
+This launches an installed Chrome or Edge browser, verifies accessible names on the dashboard, application dialog, and onboarding, then checks the dashboard and onboarding at 420px for horizontal overflow and usable navigation. Set `CHROME_PATH` or `EDGE_PATH` if the browser is installed in a nonstandard location.
 
 ## Notes
 
