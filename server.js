@@ -52,6 +52,28 @@ if (express) {
   app.setStaticDir(PUBLIC_DIR);
 }
 
+// The local JSON files are the app's database. Serialize every mutating request
+// as one transaction so two read-modify-write handlers cannot overwrite each
+// other's updates. Reads remain concurrent.
+let mutationRequestQueue = Promise.resolve();
+for (const method of ["post", "put"]) {
+  const register = app[method].bind(app);
+  app[method] = (routePath, handler) => register(routePath, async (req, res, next) => {
+    const previous = mutationRequestQueue;
+    let release;
+    mutationRequestQueue = new Promise((resolve) => { release = resolve; });
+    await previous.catch(() => {});
+    try {
+      await handler(req, res, next);
+    } catch (error) {
+      if (next) next(error);
+      else throw error;
+    } finally {
+      release();
+    }
+  });
+}
+
 function loadDotEnv() {
   try {
     const dotenv = require("dotenv");
@@ -1714,7 +1736,7 @@ app.post("/api/draft", async (req, res) => {
     fields: fields.map((field) => ({
       ...field,
       intent: fieldIntent(field),
-      source: generated.ok ? generated.source : isSimpleProfileField(field) ? "profile" : "unavailable",
+      source: isSimpleProfileField(field) ? "profile" : generated.ok ? generated.source : "unavailable",
       answer: (() => {
         if (!generated.ok && !isSimpleProfileField(field)) return "";
         const answer = parsed.find((item) => item.key === field.key)?.answer || fallbackAnswer(field, profile);

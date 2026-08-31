@@ -236,6 +236,10 @@ async function verifyDraftPressure() {
     postJson("/api/draft", { fields: fields.slice(10, 15), pageUrl: `${BASE}/mock-grant?fire=c` })
   ]);
   assert(concurrent.every((session) => session.fields.length === 5), "Concurrent draft sessions did not complete cleanly.");
+  const stored = await getJson("/api/drafts");
+  const pressureUrls = new Set(concurrent.map((session) => session.pageUrl));
+  const persisted = stored.sessions.filter((session) => pressureUrls.has(session.pageUrl));
+  assert(persisted.length === concurrent.length, "Concurrent draft sessions were acknowledged but not all persisted.");
 }
 
 async function verifyReviewFindsUglyCases() {
