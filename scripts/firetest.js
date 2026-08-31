@@ -118,6 +118,22 @@ async function verifyMissingAiSafety() {
   assert(chat.available === false, "Chat should report unavailable with AI disabled.");
   assert(chat.answer === "", "Chat must not fabricate an answer with AI disabled.");
   assert(typeof chat.status === "string" && chat.status.length > 0, "Chat should return an actionable status.");
+
+  const draft = await postJson("/api/draft", {
+    fields: [field(901, { label: "Outcomes", context: "How will you measure outcomes?" })],
+    pageUrl: `${BASE}/missing-ai-draft`
+  });
+  assert(draft.available === false, "Draft should report unavailable with AI disabled.");
+  assert(draft.fields[0].answer === "", "Draft must not fabricate a narrative with AI disabled.");
+
+  const revised = await postJson("/api/revise", {
+    field: field(902),
+    question: "Improve this answer.",
+    currentAnswer: "A human-written original answer.",
+    instruction: "Make it concise."
+  });
+  assert(revised.available === false, "Revise should report unavailable with AI disabled.");
+  assert(revised.answer === "", "Revise must not present an unchanged or fallback narrative as a revision.");
 }
 
 // Organization choices must expose provenance (needsReview) for de-duplication,
@@ -210,7 +226,8 @@ async function verifyDraftPressure() {
   const fields = Array.from({ length: 40 }, (_, index) => field(index + 1));
   const draft = await postJson("/api/draft", { fields, pageUrl: `${BASE}/mock-grant?fire=40` });
   assert(draft.fields.length === 40, "Draft did not return all 40 fields.");
-  assert(draft.status.includes("fallback"), "Fire test expected fallback status with AI keys disabled.");
+  assert(draft.available === false, "Fire test expected unavailable status with AI keys disabled.");
+  assert(draft.fields.every((item) => item.answer === ""), "Fire test draft fabricated narrative answers.");
   assert(draft.fields.every((item) => typeof item.intent === "string"), "Draft fields are missing intents.");
 
   const concurrent = await Promise.all([
@@ -303,7 +320,7 @@ async function main() {
     console.log("GrantFlow fire test");
     console.log(`Server: isolated on ${BASE}`);
     console.log(`AI diagnostic: ${statusAfterDraft.aiDiagnostic.provider}/${statusAfterDraft.aiDiagnostic.status}`);
-    console.log("Missing-AI safety: chat returns unavailable, no fabricated answer");
+    console.log("Missing-AI safety: chat, draft, and revise return unavailable with no fabricated narratives");
     console.log("Draft pressure: 40 fields plus concurrent draft sessions");
     console.log("Review pressure: missing, duplicate, length, claim, and budget issues");
     console.log("Workspace pressure: independent progress, update, and Markdown export");

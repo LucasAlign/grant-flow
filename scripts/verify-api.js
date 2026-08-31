@@ -185,6 +185,8 @@ async function main() {
     assert(draft.fields.every((field) => typeof field.answer === "string"), "Draft answer missing.");
     assert(draft.fields.every((field) => typeof field.intent === "string"), "Draft intent missing.");
     assert(draft.fields[0].answer === profile.organization, "Simple organization field was not filled from active profile.");
+    assert(draft.available === false, "Draft should report unavailable when AI is disabled.");
+    assert(draft.fields.slice(1).every((field) => field.answer === ""), "Draft must leave narrative fields blank when AI is disabled.");
     assertUniqueNarrativeAnswers(draft.fields);
 
     const similarFields = [
@@ -233,11 +235,13 @@ async function main() {
       currentAnswer: draft.fields[2].answer,
       instruction: "Make this concise, kind, and direct."
     });
-    assert(typeof revised.answer === "string" && revised.answer.length > 10, "Revise did not return an answer.");
+    assert(revised.available === false, "Revise should report unavailable when AI is disabled.");
+    assert(revised.answer === "", "Revise must not fabricate an answer when AI is disabled.");
 
+    const reviewedManualAnswer = "We provide a concise, reviewed manual answer when AI revision is unavailable.";
     const learned = await post("/api/learn-answer", {
       field: fields[2],
-      answer: revised.answer,
+      answer: reviewedManualAnswer,
       originalAnswer: draft.fields[2].answer,
       instruction: "Make this concise, kind, and direct.",
       pageUrl: `${BASE}/mock-grant`
@@ -265,6 +269,7 @@ async function main() {
       notes: "Created by verification."
     });
     assert(workspace.finalAnswers.length === draft.fields.length, "Workspace did not import draft answers.");
+    assert(workspace.finalAnswers.every((answer) => typeof answer.source === "string"), "Workspace answers lost provenance.");
     const workspaces = await getJson("/api/applications");
     assert(workspaces.items.some((item) => item.id === workspace.id), "Workspace list did not include imported workspace.");
     const markdown = await (await get(`/api/applications/export?id=${encodeURIComponent(workspace.id)}&format=markdown`)).text();

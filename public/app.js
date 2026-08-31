@@ -537,7 +537,7 @@ function renderSelectedAppContext() {
       </div>
       ${answered ? `<details class="gf-app-answers" style="margin-top:12px;"><summary>Review application answers (${answered})</summary><div class="gf-stack" style="margin-top:10px;">${applicationAnswers.map((item, index) => `
         <div class="gf-card" style="padding:10px;background:var(--paper);">
-          <div style="font-weight:600;font-size:12.5px;">${esc(item.label || item.key || `Question ${index + 1}`)}</div>
+          <div class="gf-row" style="align-items:flex-start;"><div style="font-weight:600;font-size:12.5px;">${esc(item.label || item.key || `Question ${index + 1}`)}</div><span class="gf-badge gf-badge-${answerSourceMeta(item.source).kind}">${answerSourceMeta(item.source).label}</span></div>
           <div style="font-size:12px;color:var(--ink-soft);margin-top:5px;line-height:1.5;">${esc(item.answer || "")}</div>
           <button class="gf-btn gf-btn-ghost gf-btn-sm copy-app-answer" data-index="${index}" style="margin-top:7px;">Copy answer</button>
         </div>`).join("")}</div></details>` : ""}
@@ -723,7 +723,7 @@ function wireAnswers() {
     const answer = (state.ui.draftAnswer || "").trim();
     const question = state.ui.draftQuestion.trim();
     if (!question || !answer) { toast("Add both a question and an answer first"); return; }
-    if (await saveAnswerToSelectedApplication({ id: `app_answer_${Date.now()}`, question, answer })) {
+    if (await saveAnswerToSelectedApplication({ id: `app_answer_${Date.now()}`, question, answer, source: "chat-draft" })) {
       state.ui.draftQuestion = "";
       state.ui.draftAnswer = "";
       state.ui.draftStatus = "";
@@ -774,7 +774,8 @@ async function saveAnswerToSelectedApplication(item) {
     key: item.key || item.id || `answer_${Date.now()}`,
     label: question,
     intent: item.intent || "general",
-    answer: String(item.answer || "").trim()
+    answer: String(item.answer || "").trim(),
+    source: item.source || "saved"
   };
   const existing = selected.finalAnswers || [];
   const match = question.toLowerCase();

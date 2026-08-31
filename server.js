@@ -190,8 +190,11 @@ function safeStaticPath(root, requestPath) {
   return filePath;
 }
 
+const jsonWriteQueues = new Map();
+
 async function readJson(name) {
   await ensureDataStore();
+  await (jsonWriteQueues.get(name) || Promise.resolve());
   try {
     const text = await fs.readFile(path.join(DATA_DIR, files[name]), "utf8");
     return JSON.parse(text);
@@ -209,7 +212,17 @@ async function readJson(name) {
 async function writeJson(name, data) {
   await ensureDataStore();
   await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(path.join(DATA_DIR, files[name]), JSON.stringify(data, null, 2));
+  const target = path.join(DATA_DIR, files[name]);
+  const previous = jsonWriteQueues.get(name) || Promise.resolve();
+  const pending = previous
+    .catch(() => {})
+    .then(() => fs.writeFile(target, JSON.stringify(data, null, 2)));
+  jsonWriteQueues.set(name, pending);
+  try {
+    await pending;
+  } finally {
+    if (jsonWriteQueues.get(name) === pending) jsonWriteQueues.delete(name);
+  }
 }
 
 async function pathExists(filePath) {
@@ -546,7 +559,8 @@ function normalizeFinalAnswers(fields = []) {
       label: String(field.label || field.question || fieldLabel(field)).trim(),
       intent: field.intent || fieldIntent(field),
       answer: String(field.answer || field.value || "").trim(),
-      maxLength: Number(field.maxLength || 0)
+      maxLength: Number(field.maxLength || 0),
+      source: String(field.source || "manual")
     }));
 }
 
@@ -1689,11 +1703,20 @@ app.post("/api/draft", async (req, res) => {
     pageUrl: req.body.pageUrl || "",
     fieldCount: fields.length,
     source: generated.source,
-    status: generated.missingKey ? "API key missing; fallback answers generated." : generated.ok ? `${generated.source} draft generated.` : "AI provider unavailable; fallback answers generated.",
+    available: aiFields.length ? generated.ok : true,
+    status: generated.missingKey
+      ? "AI drafting is unavailable — no API key is configured. Narrative fields were left blank."
+      : generated.ok
+        ? `${generated.source} draft generated.`
+        : aiFields.length
+          ? "AI drafting is unavailable right now. Narrative fields were left blank."
+          : "Profile fields filled from the reviewed organization profile.",
     fields: fields.map((field) => ({
       ...field,
       intent: fieldIntent(field),
+      source: generated.ok ? generated.source : isSimpleProfileField(field) ? "profile" : "unavailable",
       answer: (() => {
+        if (!generated.ok && !isSimpleProfileField(field)) return "";
         const answer = parsed.find((item) => item.key === field.key)?.answer || fallbackAnswer(field, profile);
         return uniqueSessionAnswer(answer, field, profile, usedAnswers);
       })()
@@ -1753,13 +1776,24 @@ app.post("/api/revise", async (req, res) => {
       output: "Return only JSON with one answer string."
     }) }
   ], JSON.stringify({ answer: fallback }));
+  if (!generated.ok) {
+    return res.json({
+      answer: "",
+      available: false,
+      source: "unavailable",
+      status: generated.missingKey
+        ? "AI revision is unavailable — no API key is configured. Your original answer was not changed."
+        : "AI revision is unavailable right now. Your original answer was not changed."
+    });
+  }
   const revised = parseChatAnswer(generated.text, fallback);
   const answer = answerMentionsOtherOrganization(revised, profile) || answerContradictsValues(revised, field, profile)
     ? fallbackAnswer(field, profile)
     : revised;
   res.json({
     answer,
-    status: generated.missingKey ? "API key missing; showing fallback revision." : generated.ok ? `Revised with ${generated.source}.` : "AI provider unavailable; showing fallback revision.",
+    available: true,
+    status: `Revised with ${generated.source}.`,
     source: generated.source
   });
 });
