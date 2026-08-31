@@ -490,6 +490,16 @@ function scopedDocuments(documents, organizationId) {
   return { context: documents.context || "" };
 }
 
+function profileIsReviewed(profile = {}) {
+  return Boolean(
+    String(profile.organization || "").trim()
+    && String(profile.mission || "").trim()
+    && String(profile.summary || "").trim()
+    && !looksLikeScrape(profile.mission)
+    && !looksLikeScrape(profile.summary)
+  );
+}
+
 async function approvePendingImport(organizationId) {
   const documents = await readJson("documents");
   const pending = documents.pendingImports?.[organizationId];
@@ -1254,15 +1264,17 @@ app.put("/api/profile", async (req, res) => {
   const store = await readProfileStore();
   const approveImportedContent = req.body.approveImportedContent === true;
   const { approveImportedContent: _approval, ...profileFields } = req.body;
+  const candidate = { ...activeProfile(store), ...profileFields, id: store.activeOrganizationId };
+  if (approveImportedContent && !profileIsReviewed(candidate)) {
+    res.statusCode = 400;
+    return res.json({
+      error: "Review is incomplete. Add an organization name, mission statement, and one-line summary in your own words."
+    });
+  }
   store.organizations = store.organizations.map((org) => {
     if (org.id !== store.activeOrganizationId) return org;
     const merged = { ...org, ...profileFields, id: org.id };
-    // Saving a profile whose mission/summary now read as real (non-empty and not
-    // raw scrape text) clears the "needs review" flag on imported organizations.
-    const reviewed = Boolean(merged.mission || merged.summary)
-      && !looksLikeScrape(merged.mission)
-      && !looksLikeScrape(merged.summary);
-    if (reviewed && approveImportedContent) merged.needsReview = false;
+    merged.needsReview = !profileIsReviewed(merged);
     return merged;
   });
   await writeJson("profile", store);

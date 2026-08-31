@@ -155,7 +155,11 @@ function profileNeedsReview(p = state.profile) {
   if (!p) return false;
   const entry = activeOrgEntry(p);
   if (entry && entry.needsReview) return true;
-  return looksLikeScrape(p.mission) || looksLikeScrape(p.summary);
+  return !String(p.organization || "").trim()
+    || !String(p.mission || "").trim()
+    || !String(p.summary || "").trim()
+    || looksLikeScrape(p.mission)
+    || looksLikeScrape(p.summary);
 }
 
 // Core fields that read as empty or scraped, for the profile-quality warning.
@@ -792,8 +796,8 @@ function renderProfile() {
     ["primaryContact", "Primary contact", "input", false],
     ["contactTitle", "Contact title", "input", false],
     ["contactEmail", "Contact email", "input", false],
-    ["mission", "Mission statement", "textarea", false],
-    ["summary", "One-line summary", "textarea", false],
+    ["mission", "Mission statement", "textarea", true],
+    ["summary", "One-line summary", "textarea", true],
     ["requestedAmountNarrative", "Typical requested-amount language", "textarea", false],
   ];
   const warnings = profileQualityWarnings(p);
@@ -845,9 +849,17 @@ function wireProfile() {
     const payload = {};
     app.querySelectorAll("[data-field]").forEach((el) => { payload[el.dataset.field] = el.value; });
     payload.approveImportedContent = profileNeedsReview();
-    if (!String(payload.organization || "").trim()) {
-      toast("Organization name is required");
-      const el = document.getElementById("pf_organization");
+    const required = [
+      ["organization", "pf_organization", "Organization name"],
+      ["mission", "pf_mission", "Mission statement"],
+      ["summary", "pf_summary", "One-line summary"]
+    ];
+    const missing = required.find(([key]) => !String(payload[key] || "").trim());
+    const scraped = [["mission", "pf_mission"], ["summary", "pf_summary"]].find(([key]) => looksLikeScrape(payload[key]));
+    if (missing || scraped) {
+      const [, id, label] = missing || [...scraped, "This field"];
+      toast(missing ? `${label} is required` : "Rewrite this field in your own words before confirming");
+      const el = document.getElementById(id);
       el.classList.add("gf-invalid"); el.focus();
       return;
     }
@@ -937,7 +949,7 @@ function renderOnboardingStep2() {
           const flagged = kind === "textarea" && looksLikeScrape(p[key]);
           return `
           <div class="gf-field">
-            <label class="gf-label" for="${id}">${label}${flagged ? ` <span class="gf-badge gf-badge-ai" style="text-transform:none;">looks scraped</span>` : ""}</label>
+            <label class="gf-label" for="${id}">${label} <span class="gf-req">*</span>${flagged ? ` <span class="gf-badge gf-badge-ai" style="text-transform:none;">looks scraped</span>` : ""}</label>
             ${kind === "textarea"
               ? `<textarea class="gf-textarea" id="${id}" data-onb-field="${key}" placeholder="Write in your own words…">${esc(p[key] || "")}</textarea>`
               : `<input class="gf-input" id="${id}" data-onb-field="${key}" value="${esc(p[key] || "")}" />`}
@@ -1040,7 +1052,20 @@ function wireOnboarding() {
     const payload = {};
     app.querySelectorAll("[data-onb-field]").forEach((el) => { payload[el.dataset.onbField] = el.value; });
     payload.approveImportedContent = true;
-    if (!String(payload.organization || "").trim()) { toast("Organization name is required"); return; }
+    const required = [
+      ["organization", "onb_organization", "Organization name"],
+      ["mission", "onb_mission", "Mission statement"],
+      ["summary", "onb_summary", "One-line summary"]
+    ];
+    const missing = required.find(([key]) => !String(payload[key] || "").trim());
+    const scraped = [["mission", "onb_mission"], ["summary", "onb_summary"]].find(([key]) => looksLikeScrape(payload[key]));
+    if (missing || scraped) {
+      const [, id, label] = missing || [...scraped, "This field"];
+      toast(missing ? `${label} is required` : "Rewrite this field in your own words before continuing");
+      const el = document.getElementById(id);
+      el.classList.add("gf-invalid"); el.focus();
+      return;
+    }
     try {
       state.profile = await api("/api/profile", { method: "PUT", body: payload });
       state.ui.profileDraft = null;

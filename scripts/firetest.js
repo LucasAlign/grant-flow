@@ -169,6 +169,18 @@ async function verifyImportedContentQuarantine() {
   assert(hiddenDocuments.context === "", "Pending imported context leaked before approval.");
   assert(!hiddenAnswers.items.some((item) => item.question === pendingQuestion), "Pending imported answer leaked before approval.");
 
+  const rejected = await putJson("/api/profile", {
+    organization: profile.organization,
+    mission: "We serve our community through reviewed programs.",
+    summary: "",
+    approveImportedContent: true
+  }, 400);
+  assert(/summary/i.test(rejected.error), "Partial review rejection should explain that the summary is required.");
+  const stillPendingDocuments = await getJson("/api/documents");
+  const stillPendingProfile = await getJson("/api/profile");
+  assert(stillPendingDocuments.context === "", "A partial review released pending context.");
+  assert(stillPendingProfile.needsReview === true, "A partial review cleared needsReview.");
+
   const approved = await putJson("/api/profile", {
     organization: profile.organization,
     mission: "We serve our community through reviewed programs.",
