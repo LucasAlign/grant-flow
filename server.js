@@ -342,7 +342,9 @@ function profileResponse(store) {
     activeOrganizationId: store.activeOrganizationId,
     organizations: store.organizations.map((org) => ({
       id: org.id,
-      organization: org.organization
+      organization: org.organization,
+      website: org.website || "",
+      needsReview: Boolean(org.needsReview)
     }))
   };
 }
@@ -365,6 +367,20 @@ function stripHtml(html = "") {
 function pageTitle(html = "") {
   const match = String(html).match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   return stripHtml(match?.[1] || "");
+}
+
+// Heuristic: does this text look like raw scraped page/navigation output rather
+// than a written mission/summary? Used to keep unreviewed scrape text from being
+// presented as an organization fact. Shared by the server and mirrored in app.js.
+function looksLikeScrape(text = "") {
+  const value = String(text || "");
+  if (!value.trim()) return false;
+  if (/\bSource:\s*https?:\/\//i.test(value)) return true;
+  if (/^\s*Title:\s/i.test(value)) return true;
+  // Runs of ALL-CAPS nav words like "HOME ABOUT DONATE CONTACT".
+  const navHits = (value.match(/\b(HOME|ABOUT|DONATE|CONTACT|SPONSOR|SPONSORS|MENU|LOGIN|SIGN IN|SUBSCRIBE|SHOP|BLOG|EVENTS|GALLERY|VOLUNTEER|APPLY)\b/g) || []).length;
+  if (navHits >= 3) return true;
+  return false;
 }
 
 function sameHostLinks(baseUrl, html = "") {
@@ -435,14 +451,17 @@ function parseOnboardingJson(text, fallback) {
 }
 
 function fallbackOnboardingProfile(organization, website, scrapedText) {
-  const summary = scrapedText.split(". ").slice(0, 2).join(". ").slice(0, 500);
+  // Without an AI extraction step we must not present raw scraped page text as a
+  // mission or summary. Leave the human-facing fields blank so onboarding can
+  // prompt the user to review and write them. The raw text is preserved in
+  // `context` (stored as scoped document context / source excerpt) only.
   return {
     organization,
     website,
-    summary,
-    mission: summary || `We serve our community through ${organization}'s mission and programs.`,
-    positioning: `${organization} serves its community through mission-driven programs and partnerships.`,
-    programContext: summary,
+    summary: "",
+    mission: "",
+    positioning: "",
+    programContext: "",
     audiences: [],
     focusAreas: [],
     answerPrinciples: [
@@ -1203,11 +1222,17 @@ app.get("/api/status", async (_req, res) => {
 app.get("/api/profile", async (_req, res) => res.json(profileResponse(await readProfileStore())));
 app.put("/api/profile", async (req, res) => {
   const store = await readProfileStore();
-  store.organizations = store.organizations.map((org) => (
-    org.id === store.activeOrganizationId
-      ? { ...org, ...req.body, id: org.id }
-      : org
-  ));
+  store.organizations = store.organizations.map((org) => {
+    if (org.id !== store.activeOrganizationId) return org;
+    const merged = { ...org, ...req.body, id: org.id };
+    // Saving a profile whose mission/summary now read as real (non-empty and not
+    // raw scrape text) clears the "needs review" flag on imported organizations.
+    const reviewed = Boolean(merged.mission || merged.summary)
+      && !looksLikeScrape(merged.mission)
+      && !looksLikeScrape(merged.summary);
+    if (reviewed) merged.needsReview = false;
+    return merged;
+  });
   await writeJson("profile", store);
   res.json(profileResponse(store));
 });
@@ -1306,6 +1331,14 @@ app.post("/api/onboard/website", async (req, res) => {
   const store = await readProfileStore();
   let id = slug(organizationName);
   while (store.organizations.some((org) => org.id === id)) id = `${slug(organizationName)}-${Date.now()}`;
+  // Never let raw scrape/navigation text land in human-facing fields, even if the
+  // model echoed it back. Blank anything that still looks scraped so onboarding
+  // review starts from a clean, clearly-empty state.
+  const safeField = (value) => (looksLikeScrape(value) ? "" : String(value || ""));
+  const summary = safeField(learned.summary || fallback.summary);
+  const mission = safeField(learned.mission || fallback.mission);
+  const positioning = safeField(learned.positioning || fallback.positioning);
+  const programContext = safeField(learned.programContext || fallback.programContext);
   const organization = {
     id,
     organization: organizationName,
@@ -1314,14 +1347,19 @@ app.post("/api/onboard/website", async (req, res) => {
     contactTitle: "",
     contactEmail: "",
     requestedAmountNarrative: "To be determined based on the foundation's funding guidelines.",
-    summary: learned.summary || fallback.summary,
-    mission: learned.mission || fallback.mission,
-    positioning: learned.positioning || fallback.positioning,
-    programContext: learned.programContext || fallback.programContext,
+    summary,
+    mission,
+    positioning,
+    programContext,
     audiences: Array.isArray(learned.audiences) ? learned.audiences : [],
     focusAreas: Array.isArray(learned.focusAreas) ? learned.focusAreas : [],
     answerPrinciples: Array.isArray(learned.answerPrinciples) && learned.answerPrinciples.length ? learned.answerPrinciples : fallback.answerPrinciples,
-    voice: learned.voice || fallback.voice
+    voice: learned.voice || fallback.voice,
+    // Imported content must be reviewed before it influences drafts.
+    needsReview: true,
+    importedFrom: website,
+    importedAt: new Date().toISOString(),
+    sourceExcerpt: String(scrapedText || "").slice(0, 1200)
   };
 
   store.organizations.push(organization);
@@ -1683,6 +1721,9 @@ app.post("/api/chat", async (req, res) => {
   const fields = req.body.fields || [];
   const learning = await readJson("learning");
   const memory = learningContext(learning, store.activeOrganizationId, fields);
+  // When AI is unavailable we must NOT surface an invented narrative as if it
+  // answered the question. This string is only ever used internally as the
+  // provider fallback text; it is never returned to the user (see below).
   const fallback = `We help volunteers understand what is needed, take action, and follow through so families receive timely, practical support.`;
   const generated = await generateWithOpenAI([
     { role: "system", content: [
@@ -1704,11 +1745,32 @@ app.post("/api/chat", async (req, res) => {
       output: "Return only JSON with one answer string."
     }) }
   ], fallback);
-  const answer = parseChatAnswer(generated.text, fallback);
+  if (!generated.ok) {
+    // AI could not answer. Return an explicit unavailable result with a blank
+    // answer and a machine-readable flag rather than an invented paragraph.
+    return res.json({
+      answer: "",
+      available: false,
+      source: "unavailable",
+      status: generated.missingKey
+        ? "AI drafting is unavailable — no API key is configured. Write the answer yourself or reuse a saved answer."
+        : "AI drafting is unavailable right now. Write the answer yourself or reuse a saved answer."
+    });
+  }
+  const answer = parseChatAnswer(generated.text, "");
+  if (!answer) {
+    return res.json({
+      answer: "",
+      available: false,
+      source: "unavailable",
+      status: "AI returned an empty draft. Write the answer yourself or reuse a saved answer."
+    });
+  }
   res.json({
     answer,
-    status: generated.missingKey ? "API key missing; showing fallback guidance." : generated.ok ? `Answered with ${generated.source}.` : "AI provider unavailable; showing fallback guidance.",
-    source: generated.source
+    available: true,
+    source: generated.source,
+    status: `Draft generated with ${generated.source}. Review before copying.`
   });
 });
 

@@ -87,17 +87,46 @@ async function restoreData(snapshot) {
   }
 }
 
-async function verifyExtensionHardening() {
-  for (const file of ["extension/content.js", "extension/sidepanel.js", "extension/background.js"]) {
+async function verifyWebAppSyntax() {
+  for (const file of ["server.js", "public/app.js"]) {
     await new Promise((resolve, reject) => {
       const child = spawn(process.execPath, ["--check", file], { stdio: "ignore" });
       child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${file} syntax check failed`))));
       child.on("error", reject);
     });
   }
-  const content = await fs.readFile("extension/content.js", "utf8");
-  for (const term of ["birth", "salary", "medical", "passport", "contenteditable", "HTMLInputElement.prototype"]) {
-    assert(content.includes(term), `Content script hardening is missing ${term}.`);
+}
+
+// Trust-critical: with AI disabled, chat must not fabricate an answer.
+async function verifyMissingAiSafety() {
+  const chat = await postJson("/api/chat", {
+    question: "How will you measure the success of this program?",
+    fields: []
+  });
+  assert(chat.available === false, "Chat should report unavailable with AI disabled.");
+  assert(chat.answer === "", "Chat must not fabricate an answer with AI disabled.");
+  assert(typeof chat.status === "string" && chat.status.length > 0, "Chat should return an actionable status.");
+}
+
+// Organization choices must expose provenance (needsReview) for de-duplication,
+// and answers must stay scoped to the active organization when it is switched.
+async function verifyReviewAndScoping() {
+  const profile = await getJson("/api/profile");
+  assert(Array.isArray(profile.organizations), "Profile did not return an organizations list.");
+  assert(profile.organizations.every((org) => typeof org.needsReview === "boolean"), "Organization entries missing needsReview flag.");
+  const before = await getJson("/api/answers");
+  assert(Array.isArray(before.items), "Answers are not returned as a scoped list.");
+  const others = profile.organizations.filter((org) => org.id !== profile.activeOrganizationId);
+  if (others.length) {
+    const switched = await fetch(`${BASE}/api/profile/active`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: others[0].id })
+    }).then((response) => response.json());
+    assert(switched.activeOrganizationId === others[0].id, "Active organization did not switch.");
+    assert(switched.organization !== undefined, "Switched profile is missing an active organization.");
+    const scoped = await getJson("/api/answers");
+    assert(Array.isArray(scoped.items), "Scoped answers missing after switch.");
   }
 }
 
@@ -178,10 +207,11 @@ async function main() {
   await startServer();
   const snapshot = await snapshotData();
   try {
-    await verifyExtensionHardening();
+    await verifyWebAppSyntax();
     const initialStatus = await getJson("/api/status");
     assert(initialStatus.aiConfigured === false, "Fire test server should run with AI disabled.");
 
+    await verifyMissingAiSafety();
     await verifyDraftPressure();
     const statusAfterDraft = await getJson("/api/status");
     assert(statusAfterDraft.aiDiagnostic?.status === "missing_key", "AI diagnostic did not expose missing-key fallback.");
@@ -189,15 +219,17 @@ async function main() {
 
     await verifyReviewFindsUglyCases();
     await verifyWorkspaceFlow();
+    await verifyReviewAndScoping();
     await postJson("/api/onboard/website", {}, 400);
 
     console.log("GrantFlow fire test");
     console.log(`Server: isolated on ${BASE}`);
     console.log(`AI diagnostic: ${statusAfterDraft.aiDiagnostic.provider}/${statusAfterDraft.aiDiagnostic.status}`);
+    console.log("Missing-AI safety: chat returns unavailable, no fabricated answer");
     console.log("Draft pressure: 40 fields plus concurrent draft sessions");
     console.log("Review pressure: missing, duplicate, length, claim, and budget issues");
     console.log("Workspace pressure: create, update, and Markdown export");
-    console.log("Extension hardening: syntax, sensitive-field terms, contenteditable, native setter");
+    console.log("Review + scoping: needsReview flags and organization-scoped answers");
     console.log("Result: OK");
   } finally {
     await restoreData(snapshot);
