@@ -510,7 +510,8 @@ function renderSelectedAppContext() {
   }
   const s = statusMeta(a.status);
   const d = daysUntil(a.deadline);
-  const answered = state.answers.length;
+  const applicationAnswers = a.finalAnswers || [];
+  const answered = applicationAnswers.length;
   return `
     <div class="gf-card gf-appctx" style="margin-bottom:16px;">
       <div class="gf-row" style="align-items:flex-start;">
@@ -524,12 +525,22 @@ function renderSelectedAppContext() {
       <div style="display:flex;align-items:center;gap:14px;margin-top:10px;font-size:12px;color:var(--ink-soft);flex-wrap:wrap;">
         ${a.deadline ? `<span>Due ${esc(a.deadline)}${d !== null ? ` <span class="gf-mono">(${d >= 0 ? d + "d left" : "past"})</span>` : ""}</span>` : "<span>No deadline set</span>"}
         ${a.sourceUrl ? `<a href="${esc(a.sourceUrl)}" target="_blank" rel="noopener" style="color:var(--slate);">Open portal ↗</a>` : ""}
-        <span>${answered} saved answer${answered === 1 ? "" : "s"} available</span>
+        <strong>${answered} answer${answered === 1 ? "" : "s"} saved to this application</strong>
+      </div>
+      <div class="gf-banner" style="margin-top:12px;">
+        <div>${answered ? `Next: review your ${answered} saved answer${answered === 1 ? "" : "s"}, then export or paste ${answered === 1 ? "it" : "them"} into the portal.` : "Next: paste the first question from the portal below and add its answer to this application."}</div>
       </div>
       <div class="gf-hstack" style="margin-top:12px;">
         <button class="gf-btn gf-btn-ghost gf-btn-sm" id="clearSelectedApp">← Back to all applications</button>
         <button class="gf-btn gf-btn-ghost gf-btn-sm" id="editSelectedApp">Edit details</button>
+        ${answered ? `<a class="gf-btn gf-btn-ghost gf-btn-sm" href="/api/applications/export?id=${encodeURIComponent(a.id)}&format=markdown" target="_blank" rel="noopener">Export answers ↗</a>` : ""}
       </div>
+      ${answered ? `<details class="gf-app-answers" style="margin-top:12px;"><summary>Review application answers (${answered})</summary><div class="gf-stack" style="margin-top:10px;">${applicationAnswers.map((item, index) => `
+        <div class="gf-card" style="padding:10px;background:var(--paper);">
+          <div style="font-weight:600;font-size:12.5px;">${esc(item.label || item.key || `Question ${index + 1}`)}</div>
+          <div style="font-size:12px;color:var(--ink-soft);margin-top:5px;line-height:1.5;">${esc(item.answer || "")}</div>
+          <button class="gf-btn gf-btn-ghost gf-btn-sm copy-app-answer" data-index="${index}" style="margin-top:7px;">Copy answer</button>
+        </div>`).join("")}</div></details>` : ""}
     </div>
   `;
 }
@@ -558,7 +569,8 @@ function renderAnswers() {
       ${state.ui.draftStatus ? `<div style="font-size:11px;color:var(--ink-soft);margin-top:6px;">${esc(state.ui.draftStatus)}</div>` : ""}
       <div class="gf-hstack" style="margin-top:10px;">
         <button class="gf-btn gf-btn-primary gf-btn-sm" id="draftCopyBtn">Copy</button>
-        <button class="gf-btn gf-btn-ghost gf-btn-sm" id="draftSaveBtn">Save to answers</button>
+        ${state.selectedApplicationId ? `<button class="gf-btn gf-btn-primary gf-btn-sm" id="draftSaveToAppBtn">Save to application</button>` : ""}
+        <button class="gf-btn gf-btn-ghost gf-btn-sm" id="draftSaveBtn">Save to answer library</button>
         <button class="gf-btn gf-btn-ghost gf-btn-sm" id="draftDiscardBtn">Discard</button>
       </div>
     </div>
@@ -609,6 +621,7 @@ function renderAnswerCard(a) {
       <div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;line-height:1.5;">${esc(a.answer)}</div>
       <div class="gf-hstack" style="margin-top:10px;">
         <button class="gf-btn gf-btn-primary gf-btn-sm copy-answer-btn" data-id="${a.id}">Copy</button>
+        ${state.selectedApplicationId ? `<button class="gf-btn gf-btn-ghost gf-btn-sm use-answer-btn" data-id="${a.id}">Use in application</button>` : ""}
         <button class="gf-btn gf-btn-ghost gf-btn-sm edit-answer-btn" data-id="${a.id}">Edit</button>
         <button class="gf-btn gf-btn-danger gf-btn-sm delete-answer-btn" data-id="${a.id}">Delete</button>
       </div>
@@ -626,6 +639,11 @@ function wireAnswers() {
     const item = state.applications.find((a) => a.id === state.selectedApplicationId);
     if (item) { state.ui.appModal = { mode: "edit", data: { ...item } }; render(); }
   });
+  app.querySelectorAll(".copy-app-answer").forEach((btn) => btn.addEventListener("click", () => {
+    const selected = state.applications.find((a) => a.id === state.selectedApplicationId);
+    const answer = selected?.finalAnswers?.[Number(btn.dataset.index)];
+    if (answer) copyText(answer.answer);
+  }));
 
   const search = document.getElementById("answerSearch");
   search.addEventListener("input", () => {
@@ -700,6 +718,20 @@ function wireAnswers() {
     render();
   });
 
+  const saveToAppBtn = document.getElementById("draftSaveToAppBtn");
+  if (saveToAppBtn) saveToAppBtn.addEventListener("click", async () => {
+    const answer = (state.ui.draftAnswer || "").trim();
+    const question = state.ui.draftQuestion.trim();
+    if (!question || !answer) { toast("Add both a question and an answer first"); return; }
+    if (await saveAnswerToSelectedApplication({ id: `app_answer_${Date.now()}`, question, answer })) {
+      state.ui.draftQuestion = "";
+      state.ui.draftAnswer = "";
+      state.ui.draftStatus = "";
+      toast("Saved to this application");
+      render();
+    }
+  });
+
   document.getElementById("addAnswerBtn").addEventListener("click", () => {
     state.ui.answerModal = { mode: "add", data: { question: "", answer: "" } };
     render();
@@ -711,6 +743,13 @@ function wireAnswers() {
       if (item) copyText(item.answer);
     });
   });
+  app.querySelectorAll(".use-answer-btn").forEach((btn) => btn.addEventListener("click", async () => {
+    const item = state.answers.find((a) => a.id === btn.dataset.id);
+    if (item && await saveAnswerToSelectedApplication(item)) {
+      toast("Added to this application");
+      render();
+    }
+  }));
   app.querySelectorAll(".edit-answer-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const item = state.answers.find((a) => a.id === btn.dataset.id);
@@ -725,6 +764,32 @@ function wireAnswers() {
       render();
     });
   });
+}
+
+async function saveAnswerToSelectedApplication(item) {
+  const selected = state.applications.find((a) => a.id === state.selectedApplicationId);
+  if (!selected) { toast("Choose an application first"); return false; }
+  const question = String(item.question || item.label || "Application question").trim();
+  const nextAnswer = {
+    key: item.key || item.id || `answer_${Date.now()}`,
+    label: question,
+    intent: item.intent || "general",
+    answer: String(item.answer || "").trim()
+  };
+  const existing = selected.finalAnswers || [];
+  const match = question.toLowerCase();
+  const finalAnswers = [
+    ...existing.filter((answer) => String(answer.label || answer.key || "").trim().toLowerCase() !== match),
+    nextAnswer
+  ];
+  try {
+    const updated = await api("/api/applications", { method: "PUT", body: { ...selected, finalAnswers } });
+    state.applications = state.applications.map((application) => application.id === updated.id ? updated : application);
+    return true;
+  } catch (err) {
+    toast(err.message || "Couldn't save that answer to the application");
+    return false;
+  }
 }
 
 async function saveAnswers(nextItems) {

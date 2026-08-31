@@ -543,7 +543,7 @@ function normalizeFinalAnswers(fields = []) {
     .filter((field) => field && (field.answer || field.value || field.label || field.context))
     .map((field, index) => ({
       key: field.key || `answer-${index + 1}`,
-      label: fieldLabel(field),
+      label: String(field.label || field.question || fieldLabel(field)).trim(),
       intent: field.intent || fieldIntent(field),
       answer: String(field.answer || field.value || "").trim(),
       maxLength: Number(field.maxLength || 0)

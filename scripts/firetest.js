@@ -253,18 +253,31 @@ async function verifyWorkspaceFlow() {
     ]
   });
   assert(created.id && created.finalAnswers.length === 1, "Workspace create failed.");
+  const second = await postJson("/api/applications", {
+    funderName: "Second Foundation",
+    applicationName: "Independent Workspace",
+    finalAnswers: []
+  });
   const updated = await fetch(`${BASE}/api/applications`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ...created,
       status: "review",
-      notes: "Updated during fire test."
+      notes: "Updated during fire test.",
+      finalAnswers: [
+        ...created.finalAnswers,
+        field(2, { label: "Outcomes", answer: "We track reviewed outcomes for this application only." })
+      ]
     })
   }).then((response) => response.json());
   assert(updated.status === "review", "Workspace update failed.");
+  assert(updated.finalAnswers.length === 2, "Application-specific answer progress was not persisted.");
+  const workspaces = await getJson("/api/applications");
+  const unchangedSecond = workspaces.items.find((item) => item.id === second.id);
+  assert(unchangedSecond.finalAnswers.length === 0, "Updating one application changed another application's progress.");
   const markdown = await fetch(`${BASE}/api/applications/export?id=${encodeURIComponent(created.id)}&format=markdown`).then((response) => response.text());
-  assert(markdown.includes("Fire Test Workspace") && markdown.includes("Final Answers"), "Workspace markdown export failed.");
+  assert(markdown.includes("Fire Test Workspace") && markdown.includes("Outcomes"), "Workspace markdown export omitted application answers.");
 }
 
 async function main() {
@@ -293,7 +306,7 @@ async function main() {
     console.log("Missing-AI safety: chat returns unavailable, no fabricated answer");
     console.log("Draft pressure: 40 fields plus concurrent draft sessions");
     console.log("Review pressure: missing, duplicate, length, claim, and budget issues");
-    console.log("Workspace pressure: create, update, and Markdown export");
+    console.log("Workspace pressure: independent progress, update, and Markdown export");
     console.log("Review + scoping: needsReview flags and organization-scoped answers");
     console.log("Import quarantine: pending context and examples stay hidden until explicit approval");
     console.log("Result: OK");
