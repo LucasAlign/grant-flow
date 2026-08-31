@@ -16,7 +16,7 @@ async function waitForServer() {
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
   }
-  throw new Error("Server did not start at http://localhost:3000");
+  throw new Error(`Server did not start at ${BASE}`);
 }
 
 async function ensureServer() {
@@ -25,7 +25,11 @@ async function ensureServer() {
     detached: false,
     env: {
       ...process.env,
-      PORT: String(PORT)
+      PORT: String(PORT),
+      // Verify the safe, AI-disabled contract deterministically.
+      AI_PROVIDER: "openai",
+      OPENAI_API_KEY: "",
+      GEMINI_API_KEY: ""
     }
   });
   await waitForServer();
@@ -85,18 +89,19 @@ async function verifyJsonFiles() {
   }
 }
 
-async function verifyExtensionFiles() {
-  for (const file of ["extension/content.js", "extension/sidepanel.js", "extension/background.js"]) {
+async function verifyWebAppFiles() {
+  // Syntax-check the web app's server and browser JS (the extension is retired).
+  for (const file of ["server.js", "public/app.js"]) {
     await new Promise((resolve, reject) => {
       const child = spawn(process.execPath, ["--check", file], { stdio: "ignore" });
       child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${file} syntax check failed`))));
       child.on("error", reject);
     });
   }
-  const manifest = JSON.parse(await fs.readFile("extension/manifest.json", "utf8"));
-  if (manifest.manifest_version !== 3) throw new Error("Extension manifest is not MV3.");
-  if (!manifest.side_panel?.default_path) throw new Error("Extension side panel is missing.");
-  if (!manifest.permissions.includes("scripting")) throw new Error("Extension scripting permission is missing.");
+  const shell = await fs.readFile("public/index.html", "utf8");
+  if (!/id="app"/.test(shell) || !/app\.js/.test(shell)) {
+    throw new Error("App shell (public/index.html) is missing the app mount or script.");
+  }
 }
 
 function assert(condition, message) {
@@ -129,15 +134,17 @@ async function main() {
   const snapshot = await snapshotData();
   try {
     await verifyJsonFiles();
-    await verifyExtensionFiles();
+    await verifyWebAppFiles();
 
     const status = await getJson("/api/status");
     assert(status.app === "GrantFlow Assistant", "Unexpected status payload.");
     assert(status.aiDiagnostic && typeof status.aiDiagnostic.status === "string", "AI diagnostic payload missing.");
+    assert(status.aiConfigured === false, "Verify server should run with AI disabled.");
 
-    for (const route of ["/", "/mock-grant", "/profile", "/answers", "/documents", "/drafts", "/applications", "/onboarding"]) {
+    // Every app route (including /onboarding) should serve the single-page shell.
+    for (const route of ["/", "/answers", "/profile", "/applications", "/onboarding"]) {
       const html = await (await get(route)).text();
-      assert(html.includes("GrantFlow Assistant") || html.includes("GrantFlow"), `${route} did not return the app shell.`);
+      assert(/id="app"/.test(html) && /app\.js/.test(html), `${route} did not return the app shell.`);
     }
 
     const profile = await getJson("/api/profile");
@@ -178,6 +185,8 @@ async function main() {
     assert(draft.fields.every((field) => typeof field.answer === "string"), "Draft answer missing.");
     assert(draft.fields.every((field) => typeof field.intent === "string"), "Draft intent missing.");
     assert(draft.fields[0].answer === profile.organization, "Simple organization field was not filled from active profile.");
+    assert(draft.available === false, "Draft should report unavailable when AI is disabled.");
+    assert(draft.fields.slice(1).every((field) => field.answer === ""), "Draft must leave narrative fields blank when AI is disabled.");
     assertUniqueNarrativeAnswers(draft.fields);
 
     const similarFields = [
@@ -226,11 +235,13 @@ async function main() {
       currentAnswer: draft.fields[2].answer,
       instruction: "Make this concise, kind, and direct."
     });
-    assert(typeof revised.answer === "string" && revised.answer.length > 10, "Revise did not return an answer.");
+    assert(revised.available === false, "Revise should report unavailable when AI is disabled.");
+    assert(revised.answer === "", "Revise must not fabricate an answer when AI is disabled.");
 
+    const reviewedManualAnswer = "We provide a concise, reviewed manual answer when AI revision is unavailable.";
     const learned = await post("/api/learn-answer", {
       field: fields[2],
-      answer: revised.answer,
+      answer: reviewedManualAnswer,
       originalAnswer: draft.fields[2].answer,
       instruction: "Make this concise, kind, and direct.",
       pageUrl: `${BASE}/mock-grant`
@@ -240,11 +251,15 @@ async function main() {
     const learningAfter = await getJson("/api/learning");
     assert(learningAfter.events.length >= 1, "Learning event was not saved.");
 
+    // With AI disabled, chat must return an explicit unavailable result — a blank
+    // answer and a machine-readable flag — never an invented fallback narrative.
     const chat = await post("/api/chat", {
-      question: "Give me a concise answer about volunteers.",
+      question: "How will you measure the success of this program?",
       fields
     });
-    assert(typeof chat.answer === "string" && chat.answer.length > 5, "Chat did not return an answer.");
+    assert(chat.available === false, "Chat should report unavailable when AI is disabled.");
+    assert(chat.answer === "", "Chat must not return a fabricated answer when AI is disabled.");
+    assert(typeof chat.status === "string" && chat.status.length > 0, "Chat should return an actionable status.");
 
     const workspace = await post("/api/applications/from-draft", {
       draftId: draft.id,
@@ -254,6 +269,7 @@ async function main() {
       notes: "Created by verification."
     });
     assert(workspace.finalAnswers.length === draft.fields.length, "Workspace did not import draft answers.");
+    assert(workspace.finalAnswers.every((answer) => typeof answer.source === "string"), "Workspace answers lost provenance.");
     const workspaces = await getJson("/api/applications");
     assert(workspaces.items.some((item) => item.id === workspace.id), "Workspace list did not include imported workspace.");
     const markdown = await (await get(`/api/applications/export?id=${encodeURIComponent(workspace.id)}&format=markdown`)).text();

@@ -62,6 +62,18 @@ async function postJson(pathname, body, expectedStatus = 200) {
   return response.json();
 }
 
+async function putJson(pathname, body, expectedStatus = 200) {
+  const response = await fetch(`${BASE}${pathname}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (response.status !== expectedStatus) {
+    throw new Error(`${pathname}: expected ${expectedStatus}, got ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
 async function snapshotData() {
   const snapshot = {};
   for (const file of dataFiles) {
@@ -87,18 +99,115 @@ async function restoreData(snapshot) {
   }
 }
 
-async function verifyExtensionHardening() {
-  for (const file of ["extension/content.js", "extension/sidepanel.js", "extension/background.js"]) {
+async function verifyWebAppSyntax() {
+  for (const file of ["server.js", "public/app.js"]) {
     await new Promise((resolve, reject) => {
       const child = spawn(process.execPath, ["--check", file], { stdio: "ignore" });
       child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${file} syntax check failed`))));
       child.on("error", reject);
     });
   }
-  const content = await fs.readFile("extension/content.js", "utf8");
-  for (const term of ["birth", "salary", "medical", "passport", "contenteditable", "HTMLInputElement.prototype"]) {
-    assert(content.includes(term), `Content script hardening is missing ${term}.`);
+}
+
+// Trust-critical: with AI disabled, chat must not fabricate an answer.
+async function verifyMissingAiSafety() {
+  const chat = await postJson("/api/chat", {
+    question: "How will you measure the success of this program?",
+    fields: []
+  });
+  assert(chat.available === false, "Chat should report unavailable with AI disabled.");
+  assert(chat.answer === "", "Chat must not fabricate an answer with AI disabled.");
+  assert(typeof chat.status === "string" && chat.status.length > 0, "Chat should return an actionable status.");
+
+  const draft = await postJson("/api/draft", {
+    fields: [field(901, { label: "Outcomes", context: "How will you measure outcomes?" })],
+    pageUrl: `${BASE}/missing-ai-draft`
+  });
+  assert(draft.available === false, "Draft should report unavailable with AI disabled.");
+  assert(draft.fields[0].answer === "", "Draft must not fabricate a narrative with AI disabled.");
+
+  const revised = await postJson("/api/revise", {
+    field: field(902),
+    question: "Improve this answer.",
+    currentAnswer: "A human-written original answer.",
+    instruction: "Make it concise."
+  });
+  assert(revised.available === false, "Revise should report unavailable with AI disabled.");
+  assert(revised.answer === "", "Revise must not present an unchanged or fallback narrative as a revision.");
+}
+
+// Organization choices must expose provenance (needsReview) for de-duplication,
+// and answers must stay scoped to the active organization when it is switched.
+async function verifyReviewAndScoping() {
+  const profile = await getJson("/api/profile");
+  assert(Array.isArray(profile.organizations), "Profile did not return an organizations list.");
+  assert(profile.organizations.every((org) => typeof org.needsReview === "boolean"), "Organization entries missing needsReview flag.");
+  const before = await getJson("/api/answers");
+  assert(Array.isArray(before.items), "Answers are not returned as a scoped list.");
+  const others = profile.organizations.filter((org) => org.id !== profile.activeOrganizationId);
+  if (others.length) {
+    const switched = await fetch(`${BASE}/api/profile/active`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: others[0].id })
+    }).then((response) => response.json());
+    assert(switched.activeOrganizationId === others[0].id, "Active organization did not switch.");
+    assert(switched.organization !== undefined, "Switched profile is missing an active organization.");
+    const scoped = await getJson("/api/answers");
+    assert(Array.isArray(scoped.items), "Scoped answers missing after switch.");
   }
+}
+
+async function verifyImportedContentQuarantine() {
+  const profile = await getJson("/api/profile");
+  const organizationId = profile.activeOrganizationId;
+  const pendingQuestion = "Pending import question";
+  const pendingContext = "Pending import context must stay quarantined.";
+
+  const documents = JSON.parse(await fs.readFile(path.join("data", "documents.json"), "utf8"));
+  documents.contexts = documents.contexts || {};
+  delete documents.contexts[organizationId];
+  documents.pendingImports = documents.pendingImports || {};
+  documents.pendingImports[organizationId] = {
+    context: pendingContext,
+    answerExamples: [{ question: pendingQuestion, answer: "Pending imported answer." }]
+  };
+  await fs.writeFile(path.join("data", "documents.json"), JSON.stringify(documents, null, 2));
+
+  const profileStore = JSON.parse(await fs.readFile(path.join("data", "profile.json"), "utf8"));
+  profileStore.organizations = profileStore.organizations.map((org) => (
+    org.id === organizationId ? { ...org, needsReview: true } : org
+  ));
+  await fs.writeFile(path.join("data", "profile.json"), JSON.stringify(profileStore, null, 2));
+
+  const hiddenDocuments = await getJson("/api/documents");
+  const hiddenAnswers = await getJson("/api/answers");
+  assert(hiddenDocuments.context === "", "Pending imported context leaked before approval.");
+  assert(!hiddenAnswers.items.some((item) => item.question === pendingQuestion), "Pending imported answer leaked before approval.");
+
+  const rejected = await putJson("/api/profile", {
+    organization: profile.organization,
+    mission: "We serve our community through reviewed programs.",
+    summary: "",
+    approveImportedContent: true
+  }, 400);
+  assert(/summary/i.test(rejected.error), "Partial review rejection should explain that the summary is required.");
+  const stillPendingDocuments = await getJson("/api/documents");
+  const stillPendingProfile = await getJson("/api/profile");
+  assert(stillPendingDocuments.context === "", "A partial review released pending context.");
+  assert(stillPendingProfile.needsReview === true, "A partial review cleared needsReview.");
+
+  const approved = await putJson("/api/profile", {
+    organization: profile.organization,
+    mission: "We serve our community through reviewed programs.",
+    summary: "A reviewed organization summary.",
+    approveImportedContent: true
+  });
+  assert(approved.needsReview === false, "Explicit approval did not clear the review state.");
+  const visibleDocuments = await getJson("/api/documents");
+  const visibleAnswers = await getJson("/api/answers");
+  assert(visibleDocuments.context === pendingContext, "Approved imported context was not promoted.");
+  assert(visibleAnswers.items.some((item) => item.question === pendingQuestion), "Approved imported answer was not promoted.");
 }
 
 function field(index, overrides = {}) {
@@ -117,7 +226,8 @@ async function verifyDraftPressure() {
   const fields = Array.from({ length: 40 }, (_, index) => field(index + 1));
   const draft = await postJson("/api/draft", { fields, pageUrl: `${BASE}/mock-grant?fire=40` });
   assert(draft.fields.length === 40, "Draft did not return all 40 fields.");
-  assert(draft.status.includes("fallback"), "Fire test expected fallback status with AI keys disabled.");
+  assert(draft.available === false, "Fire test expected unavailable status with AI keys disabled.");
+  assert(draft.fields.every((item) => item.answer === ""), "Fire test draft fabricated narrative answers.");
   assert(draft.fields.every((item) => typeof item.intent === "string"), "Draft fields are missing intents.");
 
   const concurrent = await Promise.all([
@@ -126,6 +236,10 @@ async function verifyDraftPressure() {
     postJson("/api/draft", { fields: fields.slice(10, 15), pageUrl: `${BASE}/mock-grant?fire=c` })
   ]);
   assert(concurrent.every((session) => session.fields.length === 5), "Concurrent draft sessions did not complete cleanly.");
+  const stored = await getJson("/api/drafts");
+  const pressureUrls = new Set(concurrent.map((session) => session.pageUrl));
+  const persisted = stored.sessions.filter((session) => pressureUrls.has(session.pageUrl));
+  assert(persisted.length === concurrent.length, "Concurrent draft sessions were acknowledged but not all persisted.");
 }
 
 async function verifyReviewFindsUglyCases() {
@@ -160,28 +274,42 @@ async function verifyWorkspaceFlow() {
     ]
   });
   assert(created.id && created.finalAnswers.length === 1, "Workspace create failed.");
+  const second = await postJson("/api/applications", {
+    funderName: "Second Foundation",
+    applicationName: "Independent Workspace",
+    finalAnswers: []
+  });
   const updated = await fetch(`${BASE}/api/applications`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ...created,
       status: "review",
-      notes: "Updated during fire test."
+      notes: "Updated during fire test.",
+      finalAnswers: [
+        ...created.finalAnswers,
+        field(2, { label: "Outcomes", answer: "We track reviewed outcomes for this application only." })
+      ]
     })
   }).then((response) => response.json());
   assert(updated.status === "review", "Workspace update failed.");
+  assert(updated.finalAnswers.length === 2, "Application-specific answer progress was not persisted.");
+  const workspaces = await getJson("/api/applications");
+  const unchangedSecond = workspaces.items.find((item) => item.id === second.id);
+  assert(unchangedSecond.finalAnswers.length === 0, "Updating one application changed another application's progress.");
   const markdown = await fetch(`${BASE}/api/applications/export?id=${encodeURIComponent(created.id)}&format=markdown`).then((response) => response.text());
-  assert(markdown.includes("Fire Test Workspace") && markdown.includes("Final Answers"), "Workspace markdown export failed.");
+  assert(markdown.includes("Fire Test Workspace") && markdown.includes("Outcomes"), "Workspace markdown export omitted application answers.");
 }
 
 async function main() {
   await startServer();
   const snapshot = await snapshotData();
   try {
-    await verifyExtensionHardening();
+    await verifyWebAppSyntax();
     const initialStatus = await getJson("/api/status");
     assert(initialStatus.aiConfigured === false, "Fire test server should run with AI disabled.");
 
+    await verifyMissingAiSafety();
     await verifyDraftPressure();
     const statusAfterDraft = await getJson("/api/status");
     assert(statusAfterDraft.aiDiagnostic?.status === "missing_key", "AI diagnostic did not expose missing-key fallback.");
@@ -189,15 +317,19 @@ async function main() {
 
     await verifyReviewFindsUglyCases();
     await verifyWorkspaceFlow();
+    await verifyReviewAndScoping();
+    await verifyImportedContentQuarantine();
     await postJson("/api/onboard/website", {}, 400);
 
     console.log("GrantFlow fire test");
     console.log(`Server: isolated on ${BASE}`);
     console.log(`AI diagnostic: ${statusAfterDraft.aiDiagnostic.provider}/${statusAfterDraft.aiDiagnostic.status}`);
+    console.log("Missing-AI safety: chat, draft, and revise return unavailable with no fabricated narratives");
     console.log("Draft pressure: 40 fields plus concurrent draft sessions");
     console.log("Review pressure: missing, duplicate, length, claim, and budget issues");
-    console.log("Workspace pressure: create, update, and Markdown export");
-    console.log("Extension hardening: syntax, sensitive-field terms, contenteditable, native setter");
+    console.log("Workspace pressure: independent progress, update, and Markdown export");
+    console.log("Review + scoping: needsReview flags and organization-scoped answers");
+    console.log("Import quarantine: pending context and examples stay hidden until explicit approval");
     console.log("Result: OK");
   } finally {
     await restoreData(snapshot);

@@ -52,6 +52,28 @@ if (express) {
   app.setStaticDir(PUBLIC_DIR);
 }
 
+// The local JSON files are the app's database. Serialize every mutating request
+// as one transaction so two read-modify-write handlers cannot overwrite each
+// other's updates. Reads remain concurrent.
+let mutationRequestQueue = Promise.resolve();
+for (const method of ["post", "put"]) {
+  const register = app[method].bind(app);
+  app[method] = (routePath, handler) => register(routePath, async (req, res, next) => {
+    const previous = mutationRequestQueue;
+    let release;
+    mutationRequestQueue = new Promise((resolve) => { release = resolve; });
+    await previous.catch(() => {});
+    try {
+      await handler(req, res, next);
+    } catch (error) {
+      if (next) next(error);
+      else throw error;
+    } finally {
+      release();
+    }
+  });
+}
+
 function loadDotEnv() {
   try {
     const dotenv = require("dotenv");
@@ -190,8 +212,11 @@ function safeStaticPath(root, requestPath) {
   return filePath;
 }
 
+const jsonWriteQueues = new Map();
+
 async function readJson(name) {
   await ensureDataStore();
+  await (jsonWriteQueues.get(name) || Promise.resolve());
   try {
     const text = await fs.readFile(path.join(DATA_DIR, files[name]), "utf8");
     return JSON.parse(text);
@@ -209,7 +234,17 @@ async function readJson(name) {
 async function writeJson(name, data) {
   await ensureDataStore();
   await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(path.join(DATA_DIR, files[name]), JSON.stringify(data, null, 2));
+  const target = path.join(DATA_DIR, files[name]);
+  const previous = jsonWriteQueues.get(name) || Promise.resolve();
+  const pending = previous
+    .catch(() => {})
+    .then(() => fs.writeFile(target, JSON.stringify(data, null, 2)));
+  jsonWriteQueues.set(name, pending);
+  try {
+    await pending;
+  } finally {
+    if (jsonWriteQueues.get(name) === pending) jsonWriteQueues.delete(name);
+  }
 }
 
 async function pathExists(filePath) {
@@ -342,7 +377,9 @@ function profileResponse(store) {
     activeOrganizationId: store.activeOrganizationId,
     organizations: store.organizations.map((org) => ({
       id: org.id,
-      organization: org.organization
+      organization: org.organization,
+      website: org.website || "",
+      needsReview: Boolean(org.needsReview)
     }))
   };
 }
@@ -365,6 +402,20 @@ function stripHtml(html = "") {
 function pageTitle(html = "") {
   const match = String(html).match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   return stripHtml(match?.[1] || "");
+}
+
+// Heuristic: does this text look like raw scraped page/navigation output rather
+// than a written mission/summary? Used to keep unreviewed scrape text from being
+// presented as an organization fact. Shared by the server and mirrored in app.js.
+function looksLikeScrape(text = "") {
+  const value = String(text || "");
+  if (!value.trim()) return false;
+  if (/\bSource:\s*https?:\/\//i.test(value)) return true;
+  if (/^\s*Title:\s/i.test(value)) return true;
+  // Runs of ALL-CAPS nav words like "HOME ABOUT DONATE CONTACT".
+  const navHits = (value.match(/\b(HOME|ABOUT|DONATE|CONTACT|SPONSOR|SPONSORS|MENU|LOGIN|SIGN IN|SUBSCRIBE|SHOP|BLOG|EVENTS|GALLERY|VOLUNTEER|APPLY)\b/g) || []).length;
+  if (navHits >= 3) return true;
+  return false;
 }
 
 function sameHostLinks(baseUrl, html = "") {
@@ -435,14 +486,17 @@ function parseOnboardingJson(text, fallback) {
 }
 
 function fallbackOnboardingProfile(organization, website, scrapedText) {
-  const summary = scrapedText.split(". ").slice(0, 2).join(". ").slice(0, 500);
+  // Without an AI extraction step we must not present raw scraped page text as a
+  // mission or summary. Leave the human-facing fields blank so onboarding can
+  // prompt the user to review and write them. The raw text is preserved in
+  // `context` (stored as scoped document context / source excerpt) only.
   return {
     organization,
     website,
-    summary,
-    mission: summary || `We serve our community through ${organization}'s mission and programs.`,
-    positioning: `${organization} serves its community through mission-driven programs and partnerships.`,
-    programContext: summary,
+    summary: "",
+    mission: "",
+    positioning: "",
+    programContext: "",
     audiences: [],
     focusAreas: [],
     answerPrinciples: [
@@ -471,6 +525,46 @@ function scopedDocuments(documents, organizationId) {
   return { context: documents.context || "" };
 }
 
+function profileIsReviewed(profile = {}) {
+  return Boolean(
+    String(profile.organization || "").trim()
+    && String(profile.mission || "").trim()
+    && String(profile.summary || "").trim()
+    && !looksLikeScrape(profile.mission)
+    && !looksLikeScrape(profile.summary)
+  );
+}
+
+async function approvePendingImport(organizationId) {
+  const documents = await readJson("documents");
+  const pending = documents.pendingImports?.[organizationId];
+  if (!pending) return { promotedAnswers: 0 };
+
+  documents.contexts = documents.contexts || {};
+  documents.contexts[organizationId] = String(pending.context || "");
+  delete documents.pendingImports[organizationId];
+  await writeJson("documents", documents);
+
+  const answers = await readJson("answers");
+  const imported = (pending.answerExamples || [])
+    .filter((item) => item.question && item.answer)
+    .slice(0, 12)
+    .map((item, index) => ({
+      id: `${organizationId}_onboard_${index + 1}`,
+      organizationId,
+      question: item.question,
+      answer: item.answer,
+      source: "website-onboarding",
+      updatedAt: new Date().toISOString()
+    }));
+  answers.items = [
+    ...(answers.items || []).filter((item) => !(item.organizationId === organizationId && item.source === "website-onboarding")),
+    ...imported
+  ];
+  await writeJson("answers", answers);
+  return { promotedAnswers: imported.length };
+}
+
 function scopedApplications(applications, organizationId) {
   return {
     items: (applications.items || [])
@@ -484,10 +578,11 @@ function normalizeFinalAnswers(fields = []) {
     .filter((field) => field && (field.answer || field.value || field.label || field.context))
     .map((field, index) => ({
       key: field.key || `answer-${index + 1}`,
-      label: fieldLabel(field),
+      label: String(field.label || field.question || fieldLabel(field)).trim(),
       intent: field.intent || fieldIntent(field),
       answer: String(field.answer || field.value || "").trim(),
-      maxLength: Number(field.maxLength || 0)
+      maxLength: Number(field.maxLength || 0),
+      source: String(field.source || "manual")
     }));
 }
 
@@ -1203,12 +1298,25 @@ app.get("/api/status", async (_req, res) => {
 app.get("/api/profile", async (_req, res) => res.json(profileResponse(await readProfileStore())));
 app.put("/api/profile", async (req, res) => {
   const store = await readProfileStore();
-  store.organizations = store.organizations.map((org) => (
-    org.id === store.activeOrganizationId
-      ? { ...org, ...req.body, id: org.id }
-      : org
-  ));
+  const approveImportedContent = req.body.approveImportedContent === true;
+  const { approveImportedContent: _approval, ...profileFields } = req.body;
+  const candidate = { ...activeProfile(store), ...profileFields, id: store.activeOrganizationId };
+  if (approveImportedContent && !profileIsReviewed(candidate)) {
+    res.statusCode = 400;
+    return res.json({
+      error: "Review is incomplete. Add an organization name, mission statement, and one-line summary in your own words."
+    });
+  }
+  store.organizations = store.organizations.map((org) => {
+    if (org.id !== store.activeOrganizationId) return org;
+    const merged = { ...org, ...profileFields, id: org.id };
+    merged.needsReview = !profileIsReviewed(merged);
+    return merged;
+  });
   await writeJson("profile", store);
+  if (approveImportedContent && !activeProfile(store).needsReview) {
+    await approvePendingImport(store.activeOrganizationId);
+  }
   res.json(profileResponse(store));
 });
 
@@ -1306,6 +1414,14 @@ app.post("/api/onboard/website", async (req, res) => {
   const store = await readProfileStore();
   let id = slug(organizationName);
   while (store.organizations.some((org) => org.id === id)) id = `${slug(organizationName)}-${Date.now()}`;
+  // Never let raw scrape/navigation text land in human-facing fields, even if the
+  // model echoed it back. Blank anything that still looks scraped so onboarding
+  // review starts from a clean, clearly-empty state.
+  const safeField = (value) => (looksLikeScrape(value) ? "" : String(value || ""));
+  const summary = safeField(learned.summary || fallback.summary);
+  const mission = safeField(learned.mission || fallback.mission);
+  const positioning = safeField(learned.positioning || fallback.positioning);
+  const programContext = safeField(learned.programContext || fallback.programContext);
   const organization = {
     id,
     organization: organizationName,
@@ -1314,14 +1430,19 @@ app.post("/api/onboard/website", async (req, res) => {
     contactTitle: "",
     contactEmail: "",
     requestedAmountNarrative: "To be determined based on the foundation's funding guidelines.",
-    summary: learned.summary || fallback.summary,
-    mission: learned.mission || fallback.mission,
-    positioning: learned.positioning || fallback.positioning,
-    programContext: learned.programContext || fallback.programContext,
+    summary,
+    mission,
+    positioning,
+    programContext,
     audiences: Array.isArray(learned.audiences) ? learned.audiences : [],
     focusAreas: Array.isArray(learned.focusAreas) ? learned.focusAreas : [],
     answerPrinciples: Array.isArray(learned.answerPrinciples) && learned.answerPrinciples.length ? learned.answerPrinciples : fallback.answerPrinciples,
-    voice: learned.voice || fallback.voice
+    voice: learned.voice || fallback.voice,
+    // Imported content must be reviewed before it influences drafts.
+    needsReview: true,
+    importedFrom: website,
+    importedAt: new Date().toISOString(),
+    sourceExcerpt: String(scrapedText || "").slice(0, 1200)
   };
 
   store.organizations.push(organization);
@@ -1330,10 +1451,15 @@ app.post("/api/onboard/website", async (req, res) => {
 
   const documents = await readJson("documents");
   const nextDocuments = documents.contexts ? documents : { contexts: {} };
-  nextDocuments.contexts[id] = learned.context || fallback.context;
+  nextDocuments.pendingImports = nextDocuments.pendingImports || {};
+  nextDocuments.pendingImports[id] = {
+    context: learned.context || fallback.context,
+    answerExamples: Array.isArray(learned.answerExamples) ? learned.answerExamples : [],
+    importedAt: organization.importedAt,
+    importedFrom: website
+  };
   await writeJson("documents", nextDocuments);
 
-  const allAnswers = await readJson("answers");
   const examples = Array.isArray(learned.answerExamples) ? learned.answerExamples : [];
   const scopedExamples = examples
     .filter((item) => item.question && item.answer)
@@ -1346,16 +1472,16 @@ app.post("/api/onboard/website", async (req, res) => {
       source: "website-onboarding",
       updatedAt: new Date().toISOString()
     }));
-  allAnswers.items = [...(allAnswers.items || []), ...scopedExamples];
-  await writeJson("answers", allAnswers);
-  await writeOrganizationMarkdown(organization, nextDocuments.contexts[id], scopedExamples);
+  await writeOrganizationMarkdown(organization, "Pending human review; imported context is quarantined.", []);
 
   res.json({
     organization: profileResponse(store),
     scrapedPages: pages.map((page) => ({ url: page.url, title: page.title })),
     source: generated.source,
-    status: generated.ok ? "AI onboarding complete." : "Website scraped; fallback onboarding created.",
-    answerExamples: scopedExamples.length
+    status: generated.ok
+      ? "Website imported into quarantine; review the profile before using it in drafts."
+      : "Website text imported into quarantine; review the profile before using it in drafts.",
+    pendingAnswerExamples: scopedExamples.length
   });
 });
 
@@ -1599,11 +1725,20 @@ app.post("/api/draft", async (req, res) => {
     pageUrl: req.body.pageUrl || "",
     fieldCount: fields.length,
     source: generated.source,
-    status: generated.missingKey ? "API key missing; fallback answers generated." : generated.ok ? `${generated.source} draft generated.` : "AI provider unavailable; fallback answers generated.",
+    available: aiFields.length ? generated.ok : true,
+    status: generated.missingKey
+      ? "AI drafting is unavailable — no API key is configured. Narrative fields were left blank."
+      : generated.ok
+        ? `${generated.source} draft generated.`
+        : aiFields.length
+          ? "AI drafting is unavailable right now. Narrative fields were left blank."
+          : "Profile fields filled from the reviewed organization profile.",
     fields: fields.map((field) => ({
       ...field,
       intent: fieldIntent(field),
+      source: isSimpleProfileField(field) ? "profile" : generated.ok ? generated.source : "unavailable",
       answer: (() => {
+        if (!generated.ok && !isSimpleProfileField(field)) return "";
         const answer = parsed.find((item) => item.key === field.key)?.answer || fallbackAnswer(field, profile);
         return uniqueSessionAnswer(answer, field, profile, usedAnswers);
       })()
@@ -1663,13 +1798,24 @@ app.post("/api/revise", async (req, res) => {
       output: "Return only JSON with one answer string."
     }) }
   ], JSON.stringify({ answer: fallback }));
+  if (!generated.ok) {
+    return res.json({
+      answer: "",
+      available: false,
+      source: "unavailable",
+      status: generated.missingKey
+        ? "AI revision is unavailable — no API key is configured. Your original answer was not changed."
+        : "AI revision is unavailable right now. Your original answer was not changed."
+    });
+  }
   const revised = parseChatAnswer(generated.text, fallback);
   const answer = answerMentionsOtherOrganization(revised, profile) || answerContradictsValues(revised, field, profile)
     ? fallbackAnswer(field, profile)
     : revised;
   res.json({
     answer,
-    status: generated.missingKey ? "API key missing; showing fallback revision." : generated.ok ? `Revised with ${generated.source}.` : "AI provider unavailable; showing fallback revision.",
+    available: true,
+    status: `Revised with ${generated.source}.`,
     source: generated.source
   });
 });
@@ -1683,6 +1829,9 @@ app.post("/api/chat", async (req, res) => {
   const fields = req.body.fields || [];
   const learning = await readJson("learning");
   const memory = learningContext(learning, store.activeOrganizationId, fields);
+  // When AI is unavailable we must NOT surface an invented narrative as if it
+  // answered the question. This string is only ever used internally as the
+  // provider fallback text; it is never returned to the user (see below).
   const fallback = `We help volunteers understand what is needed, take action, and follow through so families receive timely, practical support.`;
   const generated = await generateWithOpenAI([
     { role: "system", content: [
@@ -1704,11 +1853,32 @@ app.post("/api/chat", async (req, res) => {
       output: "Return only JSON with one answer string."
     }) }
   ], fallback);
-  const answer = parseChatAnswer(generated.text, fallback);
+  if (!generated.ok) {
+    // AI could not answer. Return an explicit unavailable result with a blank
+    // answer and a machine-readable flag rather than an invented paragraph.
+    return res.json({
+      answer: "",
+      available: false,
+      source: "unavailable",
+      status: generated.missingKey
+        ? "AI drafting is unavailable — no API key is configured. Write the answer yourself or reuse a saved answer."
+        : "AI drafting is unavailable right now. Write the answer yourself or reuse a saved answer."
+    });
+  }
+  const answer = parseChatAnswer(generated.text, "");
+  if (!answer) {
+    return res.json({
+      answer: "",
+      available: false,
+      source: "unavailable",
+      status: "AI returned an empty draft. Write the answer yourself or reuse a saved answer."
+    });
+  }
   res.json({
     answer,
-    status: generated.missingKey ? "API key missing; showing fallback guidance." : generated.ok ? `Answered with ${generated.source}.` : "AI provider unavailable; showing fallback guidance.",
-    source: generated.source
+    available: true,
+    source: generated.source,
+    status: `Draft generated with ${generated.source}. Review before copying.`
   });
 });
 
